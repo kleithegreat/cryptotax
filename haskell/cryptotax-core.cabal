@@ -1,0 +1,50 @@
+cabal-version: 3.0
+name:          cryptotax-core
+version:       0.1.0.0
+synopsis:      Financial core for crypto tax calculations
+license:       MIT
+build-type:    Simple
+
+executable cryptotax-core
+  main-is:          Main.hs
+  hs-source-dirs:   app, src
+  default-language: Haskell2010
+  ghc-options:      -Wall -Wcompat -O2
+
+  other-modules:
+    Types
+    Lot
+    GainLoss
+    Report
+
+  build-depends:
+    base       >= 4.14 && < 5,
+    aeson      >= 2.0,
+    bytestring >= 0.11,
+    text       >= 1.2,
+    containers >= 0.6,
+    time       >= 1.9,
+    vector     >= 0.12
+
+test-suite cryptotax-core-test
+  type:             exitcode-stdio-1.0
+  main-is:          Spec.hs
+  hs-source-dirs:   test, src
+  default-language: Haskell2010
+  ghc-options:      -Wall
+
+  other-modules:
+    Types
+    Lot
+    GainLoss
+    Report
+
+  build-depends:
+    base       >= 4.14 && < 5,
+    aeson      >= 2.0,
+    bytestring >= 0.11,
+    text       >= 1.2,
+    containers >= 0.6,
+    time       >= 1.9,
+    vector     >= 0.12,
+    QuickCheck >= 2.14

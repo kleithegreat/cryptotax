@@ -1,0 +1,33 @@
+# Build outputs
+bin/
+dist-newstyle/
+result
+
+# Go
+go/vendor/
+
+# Haskell
+haskell/.cabal-sandbox/
+haskell/cabal.sandbox.config
+*.hi
+*.o
+*.dyn_hi
+*.dyn_o
+
+# Nix
+.direnv/
+
+# API keys and secrets
+.env
+*.env.local
+
+# Output reports
+*_report.csv
+
+# Robinhood CSV exports (user data)
+data/*.csv
+
+# OS
+.DS_Store
+
+.claude/

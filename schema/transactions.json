@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://cryptotax.local/transactions.schema.json",
+  "title": "CryptoTax Intermediate Representation",
+  "description": "The contract between the Go plumbing layer and the Haskell financial core. Go normalizes all chain-specific data into this format; Haskell consumes it for cost basis and gain/loss calculations.",
+  "type": "object",
+  "required": ["version", "wallets", "transactions"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "const": "1.0.0",
+      "description": "Schema version for forward compatibility"
+    },
+    "wallets": {
+      "type": "array",
+      "description": "All wallet addresses owned by the user. Used by Haskell to identify transfers between own wallets (non-taxable) vs. sends to others (taxable disposals).",
+      "items": { "type": "string" },
+      "minItems": 1
+    },
+    "transactions": {
+      "type": "array",
+      "description": "Chronologically sorted list of all normalized transactions across all sources.",
+      "items": { "$ref": "#/$defs/Transaction" }
+    }
+  },
+  "$defs": {
+    "Transaction": {
+      "type": "object",
+      "required": ["id", "timestamp", "source", "chain", "tx_type", "wallet"],
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique identifier. On-chain tx hash, or source-specific ID for CEX trades."
+        },
+        "timestamp": {
+          "type": "string",
+          "format": "date-time",
+          "description": "ISO 8601 UTC timestamp of the transaction."
+        },
+        "source": {
+          "type": "string",
+          "enum": ["etherscan", "helius", "hyperliquid", "robinhood"],
+          "description": "Which fetcher produced this transaction."
+        },
+        "chain": {
+          "type": "string",
+          "enum": ["ethereum", "arbitrum", "solana", "hyperliquid", "robinhood"],
+          "description": "The chain or platform where the transaction occurred."
+        },
+        "tx_type": {
+          "type": "string",
+          "enum": [
+            "buy",
+            "sell",
+            "swap",
+            "transfer_in",
+            "transfer_out",
+            "income",
+            "funding_payment"
+          ],
+          "description": "Classified transaction type. 'swap' = disposal of one asset + acquisition of another. 'transfer_in'/'transfer_out' = movement between own wallets (non-taxable). 'income' = airdrops, staking rewards. 'funding_payment' = Hyperliquid perp funding (ordinary income/expense)."
+        },
+        "wallet": {
+          "type": "string",
+          "description": "The user's wallet address involved in this transaction."
+        },
+        "counterparty": {
+          "type": ["string", "null"],
+          "description": "The other party's address, if known. Null for CEX trades."
+        },
+        "sent": {
+          "oneOf": [
+            { "$ref": "#/$defs/AssetAmount" },
+            { "type": "null" }
+          ],
+          "description": "What the user sent/spent. Null for buys, income, transfer_in."
+        },
+        "received": {
+          "oneOf": [
+            { "$ref": "#/$defs/AssetAmount" },
+            { "type": "null" }
+          ],
+          "description": "What the user received. Null for sells, transfer_out."
+        },
+        "fee": {
+          "oneOf": [
+            { "$ref": "#/$defs/AssetAmount" },
+            { "type": "null" }
+          ],
+          "description": "Transaction fee (gas, exchange fee). Adds to cost basis on buys, reduces proceeds on sells."
+        },
+        "raw_type": {
+          "type": ["string", "null"],
+          "description": "Original transaction type from the source, for debugging. e.g. 'Uniswap V3: Exact Input', 'Market Buy'."
+        }
+      }
+    },
+    "AssetAmount": {
+      "type": "object",
+      "required": ["asset", "amount", "usd_value"],
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "type": "string",
+          "description": "Token symbol. e.g. 'ETH', 'USDC', 'SOL'. Normalized to uppercase."
+        },
+        "amount": {
+          "type": "string",
+          "description": "Exact decimal amount as a string. NEVER a float. e.g. '1.234567890123456789'."
+        },
+        "usd_value": {
+          "type": "string",
+          "description": "Fair market value in USD at the time of the transaction, as a string. e.g. '3456.78'. Resolved by Go via CoinGecko or source-provided price."
+        }
+      }
+    }
+  }
+}
