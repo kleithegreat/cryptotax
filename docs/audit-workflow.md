@@ -78,7 +78,9 @@ nix run .#audit -- filter audit/normalized.json \
 
 The summary command runs over the full snapshot or any filtered subset and
 emits stable JSON with counts by source, chain, transaction type, wallet, and
-raw type, plus exact sent/received/fee totals grouped by asset.
+raw type, plus exact sent/received/fee totals grouped by asset. It also
+surfaces rows that deserve manual review first, including `zero_usd_value_rows`
+and `suspicious_asset_rows`.
 
 ```bash
 nix run .#audit -- summary audit/normalized.json \
@@ -90,6 +92,12 @@ Notes:
 
 - Asset totals are grouped case-insensitively and emitted under upper-case
   asset keys.
+- `by_source` and `by_tx_type` are row counts over the filtered payload.
+- `zero_usd_value_rows` highlights rows where any `sent`, `received`, or `fee`
+  leg has a normalized USD value of exactly zero.
+- `suspicious_asset_rows` is heuristic. It flags blank, placeholder,
+  address-like, or non-canonical-case asset symbols so they get reviewed before
+  tax output is trusted.
 - The summary is meant for reconciliation and review support; it does not add
   tax semantics beyond the normalized payload.
 
@@ -109,8 +117,9 @@ normalization rules:
 ## 5. Record the comparison
 
 Use [known-transactions.md](/home/kevin/repos/cryptotax/docs/known-transactions.md)
-as the checklist template. Leave expected values blank until a human verifies
-them from the source system.
+as the checklist template and evidence log. The verified-cases section shows
+the first local golden fixture; leave new expected values blank until a human
+verifies them from the source system.
 
 For each reviewed transaction, capture:
 

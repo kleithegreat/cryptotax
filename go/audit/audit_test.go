@@ -3,6 +3,7 @@ package audit
 import (
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 	"time"
 
@@ -73,6 +74,12 @@ func TestBuildSummaryAggregatesExactAssetTotals(t *testing.T) {
 	if got := summary.ByTxType[types.TxTransferOut]; got != 1 {
 		t.Fatalf("expected 1 transfer_out, got %d", got)
 	}
+	if got := summary.BySource[types.SourceEtherscan]; got != 2 {
+		t.Fatalf("expected 2 etherscan rows, got %d", got)
+	}
+	if got := summary.BySource[types.SourceHelius]; got != 1 {
+		t.Fatalf("expected 1 helius row, got %d", got)
+	}
 	if got := summary.ByWallet["0xbbb"]; got != 2 {
 		t.Fatalf("expected wallet 0xbbb count 2, got %d", got)
 	}
@@ -100,6 +107,86 @@ func TestBuildSummaryAggregatesExactAssetTotals(t *testing.T) {
 	}
 	if usdc.ReceivedAmount != "25" {
 		t.Fatalf("expected USDC received amount 25, got %q", usdc.ReceivedAmount)
+	}
+
+	if len(summary.ZeroUSDValueRows) != 1 {
+		t.Fatalf("expected 1 zero usd_value row, got %d", len(summary.ZeroUSDValueRows))
+	}
+	zeroRow := summary.ZeroUSDValueRows[0]
+	if zeroRow.ID != "tx-2" {
+		t.Fatalf("expected zero usd_value row tx-2, got %q", zeroRow.ID)
+	}
+	if !slices.Equal(zeroRow.Fields, []string{"received"}) {
+		t.Fatalf("unexpected zero usd_value fields: %v", zeroRow.Fields)
+	}
+	if !slices.Equal(zeroRow.Assets, []string{"eth"}) {
+		t.Fatalf("unexpected zero usd_value assets: %v", zeroRow.Assets)
+	}
+
+	if len(summary.SuspiciousAssetRows) != 1 {
+		t.Fatalf("expected 1 suspicious asset row, got %d", len(summary.SuspiciousAssetRows))
+	}
+	suspiciousRow := summary.SuspiciousAssetRows[0]
+	if suspiciousRow.ID != "tx-2" {
+		t.Fatalf("expected suspicious asset row tx-2, got %q", suspiciousRow.ID)
+	}
+	if !slices.Equal(suspiciousRow.Assets, []string{"eth"}) {
+		t.Fatalf("unexpected suspicious assets: %v", suspiciousRow.Assets)
+	}
+	if !slices.Equal(suspiciousRow.Reasons, []string{"non_canonical_asset_case"}) {
+		t.Fatalf("unexpected suspicious asset reasons: %v", suspiciousRow.Reasons)
+	}
+}
+
+func TestBuildSummaryFlagsAddressLikeAndPlaceholderAssets(t *testing.T) {
+	t.Parallel()
+
+	rawType := "contract interaction"
+	summary, err := BuildSummary(types.TxPayload{
+		Version: "1.0.0",
+		Wallets: []string{"0xaaa"},
+		Transactions: []types.Transaction{
+			{
+				ID:        "tx-address-like",
+				Timestamp: time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC),
+				Source:    types.SourceEtherscan,
+				Chain:     types.ChainEthereum,
+				TxType:    types.TxSwap,
+				Wallet:    "0xaaa",
+				Sent: &types.AssetAmount{
+					Asset:    "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+					Amount:   "10",
+					USDValue: "10",
+				},
+				Received: &types.AssetAmount{
+					Asset:    "UNKNOWN",
+					Amount:   "0.01",
+					USDValue: "25",
+				},
+				RawType: &rawType,
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("BuildSummary returned error: %v", err)
+	}
+
+	if len(summary.SuspiciousAssetRows) != 1 {
+		t.Fatalf("expected 1 suspicious asset row, got %d", len(summary.SuspiciousAssetRows))
+	}
+
+	row := summary.SuspiciousAssetRows[0]
+	if !slices.Equal(row.Assets, []string{
+		"0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48",
+		"UNKNOWN",
+	}) {
+		t.Fatalf("unexpected suspicious assets: %v", row.Assets)
+	}
+	if !slices.Equal(row.Reasons, []string{
+		"address_like_asset_symbol",
+		"placeholder_asset_symbol",
+	}) {
+		t.Fatalf("unexpected suspicious asset reasons: %v", row.Reasons)
 	}
 }
 
@@ -172,7 +259,7 @@ func testPayload() types.TxPayload {
 				Received: &types.AssetAmount{
 					Asset:    "eth",
 					Amount:   "0.75",
-					USDValue: "1500",
+					USDValue: "0",
 				},
 			},
 			{

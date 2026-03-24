@@ -1,0 +1,89 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "wallet-a",
+    "wallet-b"
+  ],
+  "transactions": [
+    {
+      "id": "buy-eth-2024-01-15",
+      "timestamp": "2024-01-15T00:00:00Z",
+      "source": "robinhood",
+      "chain": "robinhood",
+      "tx_type": "buy",
+      "wallet": "wallet-a",
+      "counterparty": "robinhood",
+      "sent": null,
+      "received": {
+        "asset": "ETH",
+        "amount": "2.0",
+        "usd_value": "4000.00"
+      },
+      "fee": {
+        "asset": "USD",
+        "amount": "20.00",
+        "usd_value": "20.00"
+      },
+      "raw_type": "Market Buy"
+    },
+    {
+      "id": "own-transfer-2024-03-01",
+      "timestamp": "2024-03-01T12:00:00Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_out",
+      "wallet": "wallet-a",
+      "counterparty": "wallet-b",
+      "sent": {
+        "asset": "ETH",
+        "amount": "0.5",
+        "usd_value": "1050.00"
+      },
+      "received": null,
+      "fee": {
+        "asset": "ETH",
+        "amount": "0.001",
+        "usd_value": "2.00"
+      },
+      "raw_type": "Transfer to own wallet"
+    },
+    {
+      "id": "own-transfer-2024-03-01",
+      "timestamp": "2024-03-01T12:05:00Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "wallet-b",
+      "counterparty": "wallet-a",
+      "sent": null,
+      "received": {
+        "asset": "ETH",
+        "amount": "0.5",
+        "usd_value": "1050.00"
+      },
+      "fee": null,
+      "raw_type": "Transfer from own wallet"
+    },
+    {
+      "id": "sell-eth-2024-08-20",
+      "timestamp": "2024-08-20T00:00:00Z",
+      "source": "robinhood",
+      "chain": "robinhood",
+      "tx_type": "sell",
+      "wallet": "wallet-a",
+      "counterparty": "robinhood",
+      "sent": {
+        "asset": "ETH",
+        "amount": "1.0",
+        "usd_value": "3000.00"
+      },
+      "received": null,
+      "fee": {
+        "asset": "USD",
+        "amount": "30.00",
+        "usd_value": "30.00"
+      },
+      "raw_type": "Market Sell"
+    }
+  ]
+}

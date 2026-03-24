@@ -3,18 +3,24 @@
 
 module Main (main) where
 
+import           Control.Monad      (unless)
 import           Test.QuickCheck
 import qualified Data.Aeson      as Aeson
+import qualified Data.ByteString.Lazy as BL
 import qualified Data.Map.Strict as Map
 import           Data.Ratio      ((%))
 import           Data.Text       (Text)
 import qualified Data.Text       as T
+import qualified Data.Text.IO    as TIO
 import           Data.Time       (UTCTime(..), fromGregorian, secondsToDiffTime,
                                   nominalDay, addUTCTime)
+import           Paths_cryptotax_core (getDataFileName)
+import           System.Exit     (exitFailure)
 import           Types
 import           Lot             (LotQueue)
 import qualified Lot
 import           GainLoss        (processTransactions, ProcessResult(..))
+import           Report          (render8949CSV)
 
 -- ---------------------------------------------------------------------------
 -- Generators
@@ -375,6 +381,41 @@ prop_zeroValueSafe = forAll genPositiveAmount $ \amt ->
          ]
 
 -- ---------------------------------------------------------------------------
+-- 16. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
+-- ---------------------------------------------------------------------------
+
+golden_basicBuySellTransfer :: IO ()
+golden_basicBuySellTransfer = do
+  inputPath <- getDataFileName "testdata/basic-buy-sell-transfer.json"
+  expectedPath <- getDataFileName "testdata/basic-buy-sell-transfer-8949.csv"
+
+  input <- BL.readFile inputPath
+  expected <- TIO.readFile expectedPath
+
+  payload <- case Aeson.eitherDecode input of
+    Left err     -> failSpec $ "failed to decode golden fixture: " ++ err
+    Right parsed -> pure parsed
+
+  let result = processTransactions (payloadTransactions payload)
+  unless (null (prErrors result)) $
+    failSpec $ "golden fixture produced processing errors: " ++ show (prErrors result)
+
+  let actual = render8949CSV (prGainLosses result)
+  unless (actual == expected) $
+    failSpec $ unlines
+      [ "golden fixture CSV mismatch"
+      , "expected:"
+      , show expected
+      , "actual:"
+      , show actual
+      ]
+
+failSpec :: String -> IO a
+failSpec message = do
+  putStrLn message
+  exitFailure
+
+-- ---------------------------------------------------------------------------
 -- Main
 -- ---------------------------------------------------------------------------
 
@@ -384,7 +425,8 @@ main = do
 
   let check name prop = do
         putStr $ "  " ++ name ++ ": "
-        quickCheckWith stdArgs{maxSuccess=200} prop
+        result <- quickCheckWithResult stdArgs{maxSuccess=200} prop
+        unless (isSuccess result) exitFailure
 
   check "1.  conservation of units"     prop_conservationOfUnits
   check "2.  conservation of cost basis" prop_conservationOfCostBasis
@@ -401,5 +443,9 @@ main = do
   check "13. multi-lot disposal"         prop_multiLotDisposal
   check "14. dust precision"             prop_dustPrecision
   check "15. zero-value safety"          prop_zeroValueSafe
+
+  putStr "  16. golden buy/sell/transfer: "
+  golden_basicBuySellTransfer
+  putStrLn "OK"
 
   putStrLn "\nAll properties passed."

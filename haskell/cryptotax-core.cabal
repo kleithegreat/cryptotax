@@ -4,6 +4,12 @@ version:       0.1.0.0
 synopsis:      Financial core for crypto tax calculations
 license:       MIT
 build-type:    Simple
+data-files:
+  testdata/*.json
+  testdata/*.csv
+extra-source-files:
+  testdata/*.json
+  testdata/*.csv
 
 executable cryptotax-core
   main-is:          Main.hs

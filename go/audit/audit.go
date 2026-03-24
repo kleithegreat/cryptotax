@@ -6,6 +6,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -35,6 +36,8 @@ type Summary struct {
 	ByWallet            map[string]int          `json:"by_wallet,omitempty"`
 	ByRawType           map[string]int          `json:"by_raw_type,omitempty"`
 	ByAsset             map[string]AssetSummary `json:"by_asset,omitempty"`
+	ZeroUSDValueRows    []FlaggedRow            `json:"zero_usd_value_rows,omitempty"`
+	SuspiciousAssetRows []FlaggedRow            `json:"suspicious_asset_rows,omitempty"`
 }
 
 type TimestampRange struct {
@@ -50,6 +53,18 @@ type AssetSummary struct {
 	ReceivedAmount   string `json:"received_amount"`
 	FeeCount         int    `json:"fee_count,omitempty"`
 	FeeAmount        string `json:"fee_amount"`
+}
+
+type FlaggedRow struct {
+	ID        string       `json:"id"`
+	Timestamp time.Time    `json:"timestamp"`
+	Source    types.Source `json:"source"`
+	Chain     types.Chain  `json:"chain"`
+	TxType    types.TxType `json:"tx_type"`
+	Wallet    string       `json:"wallet"`
+	Assets    []string     `json:"assets,omitempty"`
+	Fields    []string     `json:"fields,omitempty"`
+	Reasons   []string     `json:"reasons,omitempty"`
 }
 
 func ParseTimestamp(value string) (*time.Time, error) {
@@ -185,6 +200,19 @@ func BuildSummary(payload types.TxPayload) (Summary, error) {
 		}
 		for asset := range assetsSeen {
 			assetAccumulators[asset].TransactionCount++
+		}
+
+		zeroUSDValueRow, err := buildZeroUSDValueRow(tx)
+		if err != nil {
+			return Summary{}, fmt.Errorf("transaction %d usd_value: %w", index, err)
+		}
+		if zeroUSDValueRow != nil {
+			summary.ZeroUSDValueRows = append(summary.ZeroUSDValueRows, *zeroUSDValueRow)
+		}
+
+		suspiciousAssetRow := buildSuspiciousAssetRow(tx)
+		if suspiciousAssetRow != nil {
+			summary.SuspiciousAssetRows = append(summary.SuspiciousAssetRows, *suspiciousAssetRow)
 		}
 	}
 
@@ -396,4 +424,173 @@ func decimalScale(value string) int {
 		frac = frac[:exponent]
 	}
 	return len(frac)
+}
+
+type assetComponent struct {
+	field  string
+	amount *types.AssetAmount
+}
+
+func transactionAssetComponents(tx types.Transaction) []assetComponent {
+	return []assetComponent{
+		{field: "sent", amount: tx.Sent},
+		{field: "received", amount: tx.Received},
+		{field: "fee", amount: tx.Fee},
+	}
+}
+
+func buildZeroUSDValueRow(tx types.Transaction) (*FlaggedRow, error) {
+	var fields []string
+	var assets []string
+
+	for _, component := range transactionAssetComponents(tx) {
+		if component.amount == nil {
+			continue
+		}
+
+		isZero, err := isZeroDecimal(component.amount.USDValue)
+		if err != nil {
+			return nil, err
+		}
+		if !isZero {
+			continue
+		}
+
+		fields = append(fields, component.field)
+		assets = appendUniqueString(assets, displayAsset(component.amount.Asset))
+	}
+
+	if len(fields) == 0 {
+		return nil, nil
+	}
+
+	return &FlaggedRow{
+		ID:        tx.ID,
+		Timestamp: tx.Timestamp,
+		Source:    tx.Source,
+		Chain:     tx.Chain,
+		TxType:    tx.TxType,
+		Wallet:    tx.Wallet,
+		Assets:    assets,
+		Fields:    fields,
+	}, nil
+}
+
+func buildSuspiciousAssetRow(tx types.Transaction) *FlaggedRow {
+	var assets []string
+	reasonSet := make(map[string]struct{})
+
+	for _, component := range transactionAssetComponents(tx) {
+		if component.amount == nil {
+			continue
+		}
+
+		reasons := suspiciousAssetReasons(component.amount.Asset)
+		if len(reasons) == 0 {
+			continue
+		}
+
+		assets = appendUniqueString(assets, displayAsset(component.amount.Asset))
+		for _, reason := range reasons {
+			reasonSet[reason] = struct{}{}
+		}
+	}
+
+	if len(assets) == 0 {
+		return nil
+	}
+
+	reasons := make([]string, 0, len(reasonSet))
+	for reason := range reasonSet {
+		reasons = append(reasons, reason)
+	}
+	sort.Strings(reasons)
+
+	return &FlaggedRow{
+		ID:        tx.ID,
+		Timestamp: tx.Timestamp,
+		Source:    tx.Source,
+		Chain:     tx.Chain,
+		TxType:    tx.TxType,
+		Wallet:    tx.Wallet,
+		Assets:    assets,
+		Reasons:   reasons,
+	}
+}
+
+func isZeroDecimal(value string) (bool, error) {
+	var rat big.Rat
+	if _, ok := rat.SetString(strings.TrimSpace(value)); !ok {
+		return false, fmt.Errorf("parse decimal %q", value)
+	}
+	return rat.Sign() == 0, nil
+}
+
+func suspiciousAssetReasons(asset string) []string {
+	trimmed := strings.TrimSpace(asset)
+	if trimmed == "" {
+		return []string{"blank_asset_symbol"}
+	}
+
+	var reasons []string
+	upper := strings.ToUpper(trimmed)
+	addressLike := looksLikeHexAddress(trimmed) || looksLikeBase58Mint(trimmed)
+
+	if upper == "UNKNOWN" || upper == "UNK" || upper == "?" {
+		reasons = append(reasons, "placeholder_asset_symbol")
+	}
+	if strings.ContainsAny(trimmed, " \t\r\n") {
+		reasons = append(reasons, "whitespace_in_asset_symbol")
+	}
+	if !addressLike && trimmed != upper {
+		reasons = append(reasons, "non_canonical_asset_case")
+	}
+	if addressLike {
+		reasons = append(reasons, "address_like_asset_symbol")
+	}
+
+	return reasons
+}
+
+func looksLikeHexAddress(asset string) bool {
+	if len(asset) != 42 || !strings.HasPrefix(asset, "0x") {
+		return false
+	}
+
+	for _, r := range asset[2:] {
+		if !strings.ContainsRune("0123456789abcdefABCDEF", r) {
+			return false
+		}
+	}
+	return true
+}
+
+func looksLikeBase58Mint(asset string) bool {
+	if len(asset) < 32 || len(asset) > 44 {
+		return false
+	}
+
+	for _, r := range asset {
+		if !strings.ContainsRune("123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz", r) {
+			return false
+		}
+	}
+	return true
+}
+
+func displayAsset(asset string) string {
+	trimmed := strings.TrimSpace(asset)
+	if trimmed == "" {
+		return "<blank>"
+	}
+	return trimmed
+}
+
+func appendUniqueString(values []string, value string) []string {
+	for _, existing := range values {
+		if existing == value {
+			return values
+		}
+	}
+	return append(values, value)
 }

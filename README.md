@@ -93,8 +93,13 @@ API keys can be passed explicitly with `--etherscan-key` / `--helius-key` or
 via `ETHERSCAN_API_KEY` / `HELIUS_API_KEY`. The CLI intentionally does not bake
 env-derived secrets into flag defaults, so `--help` output does not echo them.
 
+The audit summary reports row counts by `source` and `tx_type`, exact
+sent/received/fee asset totals, and diagnostic row lists such as
+`zero_usd_value_rows` and `suspicious_asset_rows` for manual review.
+
 For reproducible manual review of normalized transactions, see
-`docs/audit-workflow.md`.
+`docs/audit-workflow.md` and the first verified fixture in
+`docs/known-transactions.md`.
 
 ## Supported sources
 
