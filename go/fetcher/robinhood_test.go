@@ -37,3 +37,17 @@ func TestRobinhoodParses1099DATimestamps(t *testing.T) {
 		t.Fatalf("expected cleaned USD values, got %q and %q", txs[0].USDPrice, txs[1].USDPrice)
 	}
 }
+
+func TestParseRobinhoodDateSupportsCompactDates(t *testing.T) {
+	t.Parallel()
+
+	got, err := parseRobinhoodDate("20250915")
+	if err != nil {
+		t.Fatalf("parseRobinhoodDate returned error: %v", err)
+	}
+
+	want := time.Date(2025, time.September, 15, 0, 0, 0, 0, time.UTC).Unix()
+	if got != want {
+		t.Fatalf("expected %d, got %d", want, got)
+	}
+}

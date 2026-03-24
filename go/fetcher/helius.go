@@ -16,8 +16,10 @@ import (
 // Helius fetches Solana transaction history via the Helius API.
 // Uses getSignaturesForAddress (RPC) + Enhanced Transactions API (batch parse).
 type Helius struct {
-	APIKey string
-	Client *http.Client
+	APIKey            string
+	Client            *http.Client
+	EnhancedURL       string
+	LegacyEnhancedURL string
 }
 
 const (
@@ -28,8 +30,10 @@ const (
 
 func NewHelius(apiKey string) *Helius {
 	return &Helius{
-		APIKey: apiKey,
-		Client: &http.Client{Timeout: 30 * time.Second},
+		APIKey:            apiKey,
+		Client:            &http.Client{Timeout: 30 * time.Second},
+		EnhancedURL:       "https://api-mainnet.helius-rpc.com/v0/transactions",
+		LegacyEnhancedURL: "https://api.helius.xyz/v0/transactions",
 	}
 }
 
@@ -146,9 +150,10 @@ type heliusNativeTransfer struct {
 }
 
 func (h *Helius) parseEnhanced(sigs []string, wallet string) ([]RawTransaction, error) {
-	url := fmt.Sprintf("https://api.helius.xyz/v0/transactions?api-key=%s", h.APIKey)
-
-	respBody, err := h.post(url, sigs)
+	respBody, err := h.parseEnhancedAtURL(h.EnhancedURL, sigs)
+	if err != nil && h.LegacyEnhancedURL != "" && h.LegacyEnhancedURL != h.EnhancedURL && shouldFallbackHeliusEnhanced(err) {
+		respBody, err = h.parseEnhancedAtURL(h.LegacyEnhancedURL, sigs)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("enhanced transactions: %w", err)
 	}
@@ -163,6 +168,17 @@ func (h *Helius) parseEnhanced(sigs []string, wallet string) ([]RawTransaction, 
 		txs = append(txs, convertHeliusTx(etx, wallet)...)
 	}
 	return txs, nil
+}
+
+func (h *Helius) parseEnhancedAtURL(baseURL string, sigs []string) ([]byte, error) {
+	url := fmt.Sprintf("%s?api-key=%s", baseURL, h.APIKey)
+	return h.post(url, map[string][]string{"transactions": sigs})
+}
+
+func shouldFallbackHeliusEnhanced(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "http 530") ||
+		strings.Contains(message, "error code: 1016")
 }
 
 func convertHeliusTx(etx heliusEnhancedTx, wallet string) []RawTransaction {

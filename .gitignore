@@ -24,6 +24,10 @@ haskell/cabal.sandbox.config
 # Output reports
 *_report.csv
 
+# Local full-wallet audit snapshots
+audit/normalized.json
+audit/normalized.json.command
+
 # Robinhood CSV exports (user data)
 data/*.csv
 

@@ -1,0 +1,33 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "0x16b0d792878c4511c13ae155809e0eb7fcf14c89f64a2f9498243c292e3cb3d4",
+      "timestamp": "2025-10-01T02:49:35Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "counterparty": "0x0439e60f02a8900a951603950d8d4527f400c3f1",
+      "sent": {
+        "asset": "ETH",
+        "amount": "0.086000000000000000",
+        "usd_value": "356.40381982"
+      },
+      "received": null,
+      "fee": {
+        "asset": "ETH",
+        "amount": "0.000257855160736320",
+        "usd_value": "1.06861121"
+      },
+      "raw_type": "bridge(string adapterId,address srcToken,uint256 amount,bytes data)"
+    }
+  ]
+}

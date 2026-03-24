@@ -1,0 +1,37 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "gcjrtf2z4ZKat5oq14ZyJG7Sk4D4M6ndTfo5arcLzPr5ChgTZ4HcERmYBbHwBrqbu9wBk6V6y711n1uu5SuT2TJ",
+      "timestamp": "2025-09-16T02:05:40Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "counterparty": null,
+      "sent": {
+        "asset": "SOL",
+        "amount": "2.086215720",
+        "usd_value": "487.83195732"
+      },
+      "received": {
+        "asset": "SOL",
+        "amount": "0.002039280",
+        "usd_value": "0.47685670"
+      },
+      "fee": {
+        "asset": "SOL",
+        "amount": "0.000080001",
+        "usd_value": "0.01870710"
+      },
+      "raw_type": "SWAP/DFLOW"
+    }
+  ]
+}

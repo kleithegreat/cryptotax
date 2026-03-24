@@ -219,6 +219,7 @@ func parseRobinhoodDate(value string) (int64, error) {
 		"01/02/2006",
 		"1/2/2006",
 		"2006-01-02",
+		"20060102",
 	}
 
 	for _, layout := range layouts {

@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "0x3809925a2a392affc09d9dfcda52946cf99127b441b792d88126c1cf86b452e5",
+      "timestamp": "2025-10-01T02:49:43Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "counterparty": "0xf5042e6ffac5a625d4e7848e0b01373d8eb9e222",
+      "sent": null,
+      "received": {
+        "asset": "USDC",
+        "amount": "354.672114",
+        "usd_value": "354.67211400"
+      },
+      "fee": null,
+      "raw_type": "multicall(tuple[] calls,address refundTo,address nftRecipient)"
+    }
+  ]
+}

@@ -1,0 +1,50 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "0x59a94dab0b560d8ec34f0d5a884812db5485e0fd71fdccab56c1c7976f0728bc",
+      "timestamp": "2025-09-29T21:59:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "counterparty": "0x74de5d4fcbf63e00296fd95d33236b9794016631",
+      "sent": null,
+      "received": {
+        "asset": "USDC",
+        "amount": "119.762878",
+        "usd_value": "119.76287800"
+      },
+      "fee": null,
+      "raw_type": "swap(string aggregatorId, address tokenFrom, uint256 amount, bytes data)"
+    },
+    {
+      "id": "0x59a94dab0b560d8ec34f0d5a884812db5485e0fd71fdccab56c1c7976f0728bc",
+      "timestamp": "2025-09-29T21:59:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "counterparty": "0x881d40237659c251811cec9c364ef91dc08d300c",
+      "sent": {
+        "asset": "ETH",
+        "amount": "0.028566527209111203",
+        "usd_value": "118.31797546"
+      },
+      "received": null,
+      "fee": {
+        "asset": "ETH",
+        "amount": "0.000302544319189428",
+        "usd_value": "1.25309006"
+      },
+      "raw_type": "swap(string aggregatorId, address tokenFrom, uint256 amount, bytes data)"
+    }
+  ]
+}

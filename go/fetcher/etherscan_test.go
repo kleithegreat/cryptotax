@@ -7,6 +7,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/kevin/cryptotax/types"
 )
@@ -139,5 +140,62 @@ func TestEtherscanFetchEndpointPaginates(t *testing.T) {
 	}
 	if txs[len(txs)-1].ID != "0xpage2-0" {
 		t.Fatalf("expected final paginated tx to be present, got %q", txs[len(txs)-1].ID)
+	}
+}
+
+func TestEtherscanFetchPageRetriesRateLimitResponses(t *testing.T) {
+	t.Parallel()
+
+	requests := 0
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests++
+		if requests == 1 {
+			if err := json.NewEncoder(w).Encode(map[string]any{
+				"status":  "0",
+				"message": "NOTOK",
+				"result":  "Max calls per sec rate limit reached (3/sec)",
+			}); err != nil {
+				t.Fatalf("encoding rate-limit response: %v", err)
+			}
+			return
+		}
+
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"status":  "1",
+			"message": "OK",
+			"result": []etherscanTx{{
+				Hash:      "0xretried",
+				TimeStamp: "1700000000",
+				From:      "0xaaa",
+				To:        "0xbbb",
+				Value:     "1000000000000000000",
+				GasPrice:  "1",
+				GasUsed:   "21000",
+			}},
+		}); err != nil {
+			t.Fatalf("encoding success response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	client := NewEtherscan("test-key", 1, types.ChainEthereum)
+	client.BaseURL = server.URL
+	client.Sleep = func(time.Duration) {}
+
+	txs, exhausted, err := client.fetchPage("0xaaa", "txlist", 1)
+	if err != nil {
+		t.Fatalf("fetchPage returned error: %v", err)
+	}
+	if requests != 2 {
+		t.Fatalf("expected 2 requests after retry, got %d", requests)
+	}
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 transaction, got %d", len(txs))
+	}
+	if txs[0].ID != "0xretried" {
+		t.Fatalf("expected retried transaction id, got %q", txs[0].ID)
+	}
+	if exhausted != true {
+		t.Fatalf("expected exhausted=true after short page")
 	}
 }

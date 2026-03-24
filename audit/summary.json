@@ -1,0 +1,1745 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transaction_count": 834,
+  "unique_id_count": 359,
+  "missing_raw_type_count": 55,
+  "timestamp_range": {
+    "from": "2025-08-02T01:00:16Z",
+    "to": "2026-03-22T13:19:06Z"
+  },
+  "by_source": {
+    "etherscan": 172,
+    "helius": 135,
+    "hyperliquid": 523,
+    "robinhood": 4
+  },
+  "by_chain": {
+    "arbitrum": 125,
+    "ethereum": 47,
+    "hyperliquid": 523,
+    "robinhood": 4,
+    "solana": 135
+  },
+  "by_tx_type": {
+    "buy": 268,
+    "funding_payment": 14,
+    "sell": 354,
+    "swap": 14,
+    "transfer_in": 181,
+    "transfer_out": 3
+  },
+  "by_wallet": {
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e": 27,
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA": 145,
+    "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca": 523,
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp": 133,
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM": 2,
+    "robinhood": 4
+  },
+  "by_raw_type": {
+    "1099-DA-SELL": 2,
+    "1099-DA-SELL-SHORT": 2,
+    "Close Long": 221,
+    "Close Short": 19,
+    "EXECUTE_INSTRUCTION": 6,
+    "INITIALIZE_ACCOUNT": 3,
+    "Open Long": 230,
+    "Open Short": 38,
+    "SWAP/DFLOW": 2,
+    "SWAP/JUPITER": 3,
+    "SWAP/PUMP_AMM": 1,
+    "SWAP/PUMP_FUN": 7,
+    "Short \u003e Long": 1,
+    "TRANSFER": 113,
+    "airdrop(address[] recipient)": 2,
+    "airdrop(address[] users)": 3,
+    "approve(address _spender, uint256 _value)": 5,
+    "batchedFinalizeWithdrawals(bytes32[] messages)": 5,
+    "bridge(string adapterId,address srcToken,uint256 amount,bytes data)": 4,
+    "fillRelay(tuple relayData,uint256 repaymentChainId,bytes32 repaymentAddress)": 1,
+    "funding": 14,
+    "multicall(tuple[] calls,address refundTo,address nftRecipient)": 1,
+    "redeem(bytes cctpMsg,bytes cctpSigs)": 1,
+    "swap(string aggregatorId, address tokenFrom, uint256 amount, bytes data)": 4,
+    "swapAndTransferUniswapV3Native(tuple _intent,uint24 poolFeesTier)": 1,
+    "transfer(address _to, uint256 _value)": 3,
+    "transfer(address to, uint256 amount)": 87
+  },
+  "by_asset": {
+    "AADIUPTSBJFNQTDNGHJNVVEVSPCW86VMPS1R3RVCNPSV": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "615995.885559",
+      "fee_amount": "0"
+    },
+    "ARB | T.ME/S/ARB_POOL | CLAIM REWARD": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "335",
+      "fee_amount": "0"
+    },
+    "ARB | T.ME/S/CLAIMARB | GET REWARD": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "442",
+      "fee_amount": "0"
+    },
+    "BONE": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "BP": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "BTC": {
+      "transaction_count": 443,
+      "sent_count": 197,
+      "sent_amount": "5.78787",
+      "received_count": 246,
+      "received_amount": "5.87519",
+      "fee_amount": "0"
+    },
+    "CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP": {
+      "transaction_count": 2,
+      "sent_amount": "0",
+      "received_count": 2,
+      "received_amount": "1048850.209706",
+      "fee_amount": "0"
+    },
+    "CODNK32FCD8PRSRIUCWQ6AUWG4KKH9FS3KWGMWD4PUMP": {
+      "transaction_count": 2,
+      "sent_amount": "0",
+      "received_count": 2,
+      "received_amount": "4498835.923819",
+      "fee_amount": "0"
+    },
+    "CSS": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "DK": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "EPIN": {
+      "transaction_count": 2,
+      "sent_amount": "0",
+      "received_count": 2,
+      "received_amount": "2",
+      "fee_amount": "0"
+    },
+    "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V": {
+      "transaction_count": 8,
+      "sent_count": 6,
+      "sent_amount": "997.631976",
+      "received_count": 2,
+      "received_amount": "387.968427",
+      "fee_amount": "0"
+    },
+    "ERCAI": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "2",
+      "fee_amount": "0"
+    },
+    "ETH": {
+      "transaction_count": 104,
+      "sent_count": 47,
+      "sent_amount": "4.705119003950523309",
+      "received_count": 16,
+      "received_amount": "4.553594428127485536",
+      "fee_count": 74,
+      "fee_amount": "0.003196356352424509"
+    },
+    "FARTCOIN": {
+      "transaction_count": 9,
+      "sent_count": 3,
+      "sent_amount": "6400.5",
+      "received_count": 6,
+      "received_amount": "6400.5",
+      "fee_amount": "0"
+    },
+    "FISH": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "GONE": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "GUYS": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "HH2HAYW3HPQGAIPEENGLFLPNMB6ZRV44COTDKACRVBUS": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1441926.722437",
+      "fee_amount": "0"
+    },
+    "HYPE": {
+      "transaction_count": 10,
+      "sent_count": 7,
+      "sent_amount": "130.46",
+      "received_count": 3,
+      "received_amount": "130.46",
+      "fee_amount": "0"
+    },
+    "HZKHVXDSXCS1ET6WR3TCW1VHNDNMOPFBMXS4AHCBPUMP": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "546680.393884",
+      "fee_amount": "0"
+    },
+    "KEB": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "LIFE": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "MB": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "PSO1F9NQXWGXIBFTKF7NWYXB5ENAM4QFP6UJSIXRQFL": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "0.293089157",
+      "fee_amount": "0"
+    },
+    "PUMP": {
+      "transaction_count": 12,
+      "sent_count": 6,
+      "sent_amount": "1131110",
+      "received_count": 6,
+      "received_amount": "1131110",
+      "fee_amount": "0"
+    },
+    "QUK": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "SDOG": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "SEO": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "SO11111111111111111111111111111111111111112": {
+      "transaction_count": 2,
+      "sent_count": 2,
+      "sent_amount": "1.859772756",
+      "received_amount": "0",
+      "fee_amount": "0"
+    },
+    "SOL": {
+      "transaction_count": 147,
+      "sent_count": 59,
+      "sent_amount": "119.557377174",
+      "received_count": 90,
+      "received_amount": "107.789578138",
+      "fee_count": 33,
+      "fee_amount": "0.012790519"
+    },
+    "SP": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "SPD": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "SUPERX": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "2",
+      "fee_amount": "0"
+    },
+    "TRUNK": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "1",
+      "fee_amount": "0"
+    },
+    "USDC": {
+      "transaction_count": 601,
+      "sent_count": 29,
+      "sent_amount": "16626.925032",
+      "received_count": 64,
+      "received_amount": "4232.707165",
+      "fee_count": 509,
+      "fee_amount": "1071.542289"
+    },
+    "USDC.E": {
+      "transaction_count": 6,
+      "sent_count": 6,
+      "sent_amount": "0",
+      "received_amount": "0",
+      "fee_amount": "0"
+    },
+    "XENA": {
+      "transaction_count": 1,
+      "sent_amount": "0",
+      "received_count": 1,
+      "received_amount": "2",
+      "fee_amount": "0"
+    },
+    "ZEC": {
+      "transaction_count": 4,
+      "sent_count": 2,
+      "sent_amount": "1.92",
+      "received_count": 2,
+      "received_amount": "1.92",
+      "fee_amount": "0"
+    },
+    "ꓴꓢꓓС": {
+      "transaction_count": 7,
+      "sent_count": 7,
+      "sent_amount": "3440.743891",
+      "received_amount": "0",
+      "fee_amount": "0"
+    }
+  },
+  "zero_usd_value_rows": [
+    {
+      "id": "3eCcNBxLkqt7NaUEyTacYTAxQ3VYsPqqWxkoKUdZxToGUMmMLR948M8rsEwNi23GUHCxor2veHAyo1uTjAnjMXWW",
+      "timestamp": "2025-08-02T01:02:31Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "transfer_in",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "PSO1F9NQXWGXIBFTKF7NWYXB5ENAM4QFP6UJSIXRQFL"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "PbxPFcX7JQF6PuTMjRs2xKuC2azpAmnc1uALwYxCKuwnWFT3vb156p17CZRYjcU1ySB1ANHSWgGfPEfHtE2QXKm",
+      "timestamp": "2025-08-03T19:22:35Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "4m8xKCRoKWtqQwjq65bfP61vRaG9A9WFooKhu7fhpneBp3S6Aq879oA1N5oTSaPr8ojhCen8vKwRw5djTWrF18nV",
+      "timestamp": "2025-08-03T19:23:16Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "2qpvZ6FQguaf3ic7jDQcTvEDPCeqvojppDxwvprzirgqK9YHfcXYeqQxcZbP4B6J44JR3ujZy3LwHsLcGpZ6QKi9",
+      "timestamp": "2025-08-03T19:26:13Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "AADIUPTSBJFNQTDNGHJNVVEVSPCW86VMPS1R3RVCNPSV"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "4vUk68aXAnNTVGDJ28ASB5faL98n6T3GHt4dsGQz2tWkYTnsxeSa2Xa7K5yMVB8htfwrJazwaMiTme2Xafzr3xKw",
+      "timestamp": "2025-08-03T19:27:24Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "HZKHVXDSXCS1ET6WR3TCW1VHNDNMOPFBMXS4AHCBPUMP"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "4FHQVcthLgxVT1ZQTrHpe5dhcs8dam2mfZoh5eRmZaFc2KaRcuHjGhaDt1AFotsa9uRRPnteYXkKiFU91DuRrF7D",
+      "timestamp": "2025-08-03T19:32:06Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "HH2HAYW3HPQGAIPEENGLFLPNMB6ZRV44COTDKACRVBUS"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "4uaCsD9pwhm87zfYj4cCkwy2q6Bv1NHzcJHaZHqxRpyynnJFXAQ4xUyjsiEsxfz9BKRJMJttUC8T5dBYZ4tbE4Hu",
+      "timestamp": "2025-08-03T19:36:03Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "CODNK32FCD8PRSRIUCWQ6AUWG4KKH9FS3KWGMWD4PUMP"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "65BejcfBgHK3qofmKNJ6kpYwDi9ep5zftYSpxDKxp2aXKSeB2uBKmER6LjF8LdYrYD8JUHxFh3z1WYF49eecWPNQ",
+      "timestamp": "2025-08-03T19:37:49Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "swap",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "CODNK32FCD8PRSRIUCWQ6AUWG4KKH9FS3KWGMWD4PUMP"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn",
+      "timestamp": "2025-08-16T21:42:50Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "SO11111111111111111111111111111111111111112"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn",
+      "timestamp": "2025-08-16T21:42:50Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "transfer_in",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn",
+      "timestamp": "2025-08-16T21:42:50Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x131b1e0367f4fbfd1a55966e2d4fb68a56dbe8a857b206261c5b6c2da49c444e",
+      "timestamp": "2025-09-12T00:15:23Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x92200f09e3f4cb145e9bacc0cd7b5ccf286f22b2b3bdfec5b015f390fdcd706a",
+      "timestamp": "2025-09-12T00:15:47Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x28d33ec09569e79a6aa3ba527e5f5caa0efb7825144bf78f760f0dcf768f9aa3",
+      "timestamp": "2025-09-12T00:18:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x3a3b6f3150f6fad511ab8e531e1953bbf06cd14fbc3bda2a4f906ada6d488d1d",
+      "timestamp": "2025-09-12T05:07:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "EPIN"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x0523c4cedd953a520c77fcfd88b88f7f232b5f48b79ec63c8d878e4280be53d2",
+      "timestamp": "2025-09-12T11:10:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "QUK"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xa6a7747ea52f8254481b004305f3a151d2cda9ebd8dd892e854c62ddb8acb522",
+      "timestamp": "2025-09-13T20:28:47Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "CSS"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "NB57sKKupYBqN7GLzXkKm9rMcEihUUeZM9rwkRHGufhcFnHcpAzrum2kCJCmBkRHKQW6YuUb5Wukp7wQ6pv3pf9",
+      "timestamp": "2025-09-16T06:29:29Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x6070670209127fd444105dddd0943ae9d7a27a41ceab1d8435fd54624fd8a683",
+      "timestamp": "2025-09-17T01:11:47Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "DK"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "rh-sell-20250921-SOL-1e-05",
+      "timestamp": "2025-09-21T00:00:00Z",
+      "source": "robinhood",
+      "chain": "robinhood",
+      "tx_type": "sell",
+      "wallet": "robinhood",
+      "assets": [
+        "SOL"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xdd3c985660928111379b68b6172a2fea43508506b612e90a8875d77900794f6a",
+      "timestamp": "2025-09-21T03:58:47Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "SDOG"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x4dcf2a8dd82d7ea984e283f2a951e8a4de0fccbbc696504c2f7e1cd520f7e534",
+      "timestamp": "2025-09-27T09:34:23Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "MB"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "Bc59LCRUjWRKoYVjitvwRXF877vcvrXWJpC9pu57KneeynfyVVo9sMVrAKbEVsyXekGBsJJiQDCEgxDZi2uuPtd",
+      "timestamp": "2025-09-29T21:43:21Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "Bc59LCRUjWRKoYVjitvwRXF877vcvrXWJpC9pu57KneeynfyVVo9sMVrAKbEVsyXekGBsJJiQDCEgxDZi2uuPtd",
+      "timestamp": "2025-09-29T21:43:21Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "Bc59LCRUjWRKoYVjitvwRXF877vcvrXWJpC9pu57KneeynfyVVo9sMVrAKbEVsyXekGBsJJiQDCEgxDZi2uuPtd",
+      "timestamp": "2025-09-29T21:43:21Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x3422cde254b0f4e8b7e27ba09e2dbd941c45da0f657508fb9b6438d7745dc446",
+      "timestamp": "2025-10-01T01:55:23Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x0913fb2668a052cb9cd3981d9803f3745a96808227cd77cc1c4c6e9589a29a06",
+      "timestamp": "2025-10-01T01:55:23Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x3190595d8562590903f3a587ff87f20b38d54d36323633bdcec90ccc7dfa0297",
+      "timestamp": "2025-10-01T01:55:35Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xe0800f2a3514be37fa06fe4b668fc87ffd276f9d1bd60d884f2bc9815eea8127",
+      "timestamp": "2025-10-01T02:41:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "SUPERX"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xddfee0a83bc8e9501302d315d67ac3d55d415a06c6b60aa6f761870dfa8454fd",
+      "timestamp": "2025-10-01T02:41:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ERCAI"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "35tYuUHSSqcSefhxTQD4zYm7W548uDFPc2JJtKHm99GU14SGnkQJ2AxLYgMk4DpL2w19FiZkwrR2fhTAhbzSBL5x",
+      "timestamp": "2025-10-01T02:44:15Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "SO11111111111111111111111111111111111111112"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "35tYuUHSSqcSefhxTQD4zYm7W548uDFPc2JJtKHm99GU14SGnkQJ2AxLYgMk4DpL2w19FiZkwrR2fhTAhbzSBL5x",
+      "timestamp": "2025-10-01T02:44:15Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "transfer_in",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "35tYuUHSSqcSefhxTQD4zYm7W548uDFPc2JJtKHm99GU14SGnkQJ2AxLYgMk4DpL2w19FiZkwrR2fhTAhbzSBL5x",
+      "timestamp": "2025-10-01T02:44:15Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x10c5abc66a104990568a1dfd1356d64fbe95b0654b8c1412743e5e317401f0a3",
+      "timestamp": "2025-10-01T02:46:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_out",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x8407cd7f3a6325ba689a5674e92b07eead7a0fdc105ea32a8b88f21f8e87b0ae",
+      "timestamp": "2025-10-01T03:19:47Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "XENA"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xe3b5c71286285fff7f9c61704cbae8b24e16cd73cfc999c7f979fb663fd455a3",
+      "timestamp": "2025-10-01T05:47:47Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "KEB"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x225a1f63ce1ee9d9ed421d7484820eb658faf148ad42ffdab883c6781ada8c68",
+      "timestamp": "2025-10-04T05:07:23Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "TRUNK"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xa924a4f37d8ea07bcc9fcd22aee42c02c6d4c0201a3d6f7046679e2aa0175b25",
+      "timestamp": "2025-10-06T19:37:54Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x12c9967e092b0de2a1f11293f809db0eda7a523b4ccd33187b8557a35062b959",
+      "timestamp": "2025-10-07T01:46:36Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xba8ff0acb9ab78b0764feaa989fde99106f6c4af37366ac9fc4a2a50125715c4",
+      "timestamp": "2025-10-14T02:33:23Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "BP"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xf5efa0950f983e0e3876e4e077705e9c814454a7c7f853322f6d1c7e4e4e7ad7",
+      "timestamp": "2025-10-18T10:35:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "SPD"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xfe0cf3d9f39c7cd0ef809b9decb0ba4ef25afbbdd731fd66c28cbcf04ea26494",
+      "timestamp": "2025-10-18T23:47:56Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x597f7a2aa0081dc9c02da6abb93d6917c38d8b1f280a0ebe93b89027969553a1",
+      "timestamp": "2025-10-18T23:49:59Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ꓴꓢꓓС"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x9d5e9f24567723f6fa196f5f7a8a97fb52dfddb020552bf723a2a080ebf6541a",
+      "timestamp": "2025-10-18T23:50:46Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC.E"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x7921b8fdeddb70a5e4f395757a1f0022e831b33ad00383d15a223e54b751b501",
+      "timestamp": "2025-10-19T00:03:34Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ARB | T.ME/S/CLAIMARB | GET REWARD"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xabe5b9a79e83186d6dc419b32ca316bcca0b6aee123e2f50243db115a94f7ecf",
+      "timestamp": "2025-10-19T02:38:59Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xfcc6e0e0f470365e62faf22508b39a220eaf7ba0a1c5bc8d214f54ba619302cb",
+      "timestamp": "2025-10-19T02:38:59Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x470495033e64fa1d968c0be3e72d750f3109f46381760c9be6879f32497035e6",
+      "timestamp": "2025-10-19T02:40:52Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xb240480fffb5c05e0f20e07f88bc50fd9a8f1803b687d2978d32bbf8d6a7e418",
+      "timestamp": "2025-10-19T02:41:43Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ꓴꓢꓓС"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xd9ddabcc2d7426805b00e786ae22926117130bfba379dcac5f588b93435ba542",
+      "timestamp": "2025-10-19T02:42:28Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC.E"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x5ea2fde4590df2e22f548d85c240d6d465876b16a0c00425191a5c4c0826f78e",
+      "timestamp": "2025-10-20T20:31:23Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "SEO"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xc18d32eceab6dfd497bd4ddcfcd14e2ebf448c12c1c9bee3e49a4e36f8da803a",
+      "timestamp": "2025-10-20T20:50:05Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x68c0a5ac4aae51920a74c156f853897127890f1baf1cb4a5c1943b0a2514a0ff",
+      "timestamp": "2025-10-20T20:51:06Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ꓴꓢꓓС"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xb5acf50a78af55128cffbfeffe06a0a119d45f1afb752139133dbba29e6c7ed2",
+      "timestamp": "2025-10-20T20:51:53Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC.E"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x4f36a41e570efb7484c58b258fabe6e078173461c9e7d2c18a19c57d28050a33",
+      "timestamp": "2025-10-20T21:00:25Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ꓴꓢꓓС"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xf2edd05207800a70a27a74470e72afe78f578f6414344f0c09fb4dde39945b0c",
+      "timestamp": "2025-10-20T21:01:27Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x5f0196fa9c837e92c1cdca9e888b2214952020edd629de7bc14101505de27781",
+      "timestamp": "2025-10-24T12:21:59Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "EPIN"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x18643afb80ce91cd2f56bc74d005d57943fa5a862c5a29f4df82bc7e1b00c73f",
+      "timestamp": "2025-10-27T03:59:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "SP"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xf7b02cbb8bd8ee8ca9d5348f24351fa5c0a6298ab0130595d4500bd538b91db2",
+      "timestamp": "2025-10-31T06:57:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "BONE"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x2d625bee9492720fcd41d3def2c2439da708a2a49c5c1e2e5df048030c14cad6",
+      "timestamp": "2025-11-02T08:35:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "LIFE"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x5e4a0268b6913f23549a8b8f6522a720f3ad979ea712ad3f8c62bdd5e0d32d90",
+      "timestamp": "2025-11-04T02:24:58Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x275145ec160ba4faabf62acd1f1da55c60f339f47627d293194fa04d1c42690d",
+      "timestamp": "2025-11-04T02:26:12Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ꓴꓢꓓС"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x364e4f2917c3c7d04462fbaad6f8a4224b97d3603cf83110d6a7a62925299222",
+      "timestamp": "2025-11-04T02:27:12Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC.E"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xe9274f75f42ec2c169352e79aa3ccfe3194b2d7165e0d19deab781f511e98487",
+      "timestamp": "2025-11-08T05:43:59Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "GONE"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x1f1adeff821e63e71e6a820809952d83402b6b70ce5bc4dba68e1265c94902de",
+      "timestamp": "2025-11-09T19:10:47Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC.E"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x61b04dded9205569ea5d1fc8e17219475d52e576627f5c4e9b0377b8e1be71be",
+      "timestamp": "2025-11-09T19:11:25Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC.E"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x1e2ef81d438f1827a356e31007766eab9bbc756a2949681296d3300f7417bce0",
+      "timestamp": "2025-11-09T19:58:37Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ARB | T.ME/S/ARB_POOL | CLAIM REWARD"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x2ea2458d6b252dff6de40882d5e064fda62b8fe3730253d6423d8929cebe0e78",
+      "timestamp": "2025-11-22T04:51:11Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "FISH"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0x83fd826ff4155090475bc99df526b2e907e29ff6dfb9d32cd453f3438dd8bbab",
+      "timestamp": "2025-11-27T02:29:34Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x6cf33c2a9253310fd1615d13dd65c04a200579bd7c6c7d1ca267f4cb114b0ead",
+      "timestamp": "2025-11-27T02:42:54Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ꓴꓢꓓС"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x0933b20398983f69030b00c141552bddc2e7364c9c81c36bf47d130619560fd2",
+      "timestamp": "2025-11-27T03:06:03Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xfa6d90e281c7688f1a801de1399d3132defe5afe5656f142ec72ad515777bcad",
+      "timestamp": "2025-12-05T21:13:10Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x0672e27f73bda11415af310d2d820c1c8dc77c701324ea7bee31d2472c965a9d",
+      "timestamp": "2025-12-05T21:16:25Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ꓴꓢꓓС"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x02531611f58aa5876fecb8459f95d890abefd5b4916ce06a9c3e52808d6781b8",
+      "timestamp": "2025-12-05T21:17:10Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xd104efa0de4a902a8e77315892e515cff9e2242f020e9e8fe90192942c09cb15",
+      "timestamp": "2025-12-25T09:59:35Z",
+      "source": "etherscan",
+      "chain": "ethereum",
+      "tx_type": "transfer_in",
+      "wallet": "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+      "assets": [
+        "GUYS"
+      ],
+      "fields": [
+        "received"
+      ]
+    },
+    {
+      "id": "0xfe31f8ca3c616f2778564dfab125c6246ac9b87cc8edce123443cb4b0cb4ee07",
+      "timestamp": "2025-12-29T18:32:05Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x1796b29f7478eaf84cff07c482fd213789300e5bfcbaa2fb83fb5daa85202e53",
+      "timestamp": "2026-01-06T19:05:54Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x7c4153f4dd9024c90382a0afaa2f0d20f6c3153cce82f0df7f5e32e5aeb35da0",
+      "timestamp": "2026-03-05T01:46:53Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x98e4b4a173da2568ed90b7e902b60f53571c817cf7bfcaba7ad311e891cdcb21",
+      "timestamp": "2026-03-05T02:15:03Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xf651714c84a6b900e7787863709a7a708b2b20efd7efcb990b90db9b25a8222e",
+      "timestamp": "2026-03-05T02:25:01Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xbc32c3a0760a178bc03458ee7436b246c8a596b9e9e6ebecb772f8922cc6ce9f",
+      "timestamp": "2026-03-05T03:47:30Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x0a977b0105666c3e88be9830d89027cc367248f6f3e70037438a39ee695e048e",
+      "timestamp": "2026-03-06T05:47:19Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x69c9d79f5e30196d03b1e2250c206917346aa8b35a45f599ca65db6d897616fa",
+      "timestamp": "2026-03-06T06:03:34Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x0a26a1a027d17567265b8d04c4259a187d78a905140489020084856eff4a5f27",
+      "timestamp": "2026-03-06T06:12:38Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0xf8dd11617dd78e0ca155dce96284fe9334e2c2c7161815a096349ea1c12d36f7",
+      "timestamp": "2026-03-06T06:15:04Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x5aa3c8893ee29429e716435f95497afd61278e74cccb7d5c9ed4c1343668b336",
+      "timestamp": "2026-03-06T06:26:08Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x8b49603ca1d112f0e4d0774b6cacbb4481fd7f9a944af17c8fe4922d30c0c357",
+      "timestamp": "2026-03-06T08:02:53Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "USDC"
+      ],
+      "fields": [
+        "sent"
+      ]
+    },
+    {
+      "id": "0x9b320eb68ee86266f2e5e22046b559b9700beb0bdeb02aeac4ffe67e54b5e09c",
+      "timestamp": "2026-03-21T22:15:50Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "sell",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ETH"
+      ],
+      "fields": [
+        "sent"
+      ]
+    }
+  ],
+  "suspicious_asset_rows": [
+    {
+      "id": "2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn",
+      "timestamp": "2025-08-16T21:42:50Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "transfer_in",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn",
+      "timestamp": "2025-08-16T21:42:50Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "NB57sKKupYBqN7GLzXkKm9rMcEihUUeZM9rwkRHGufhcFnHcpAzrum2kCJCmBkRHKQW6YuUb5Wukp7wQ6pv3pf9",
+      "timestamp": "2025-09-16T06:29:29Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "Bc59LCRUjWRKoYVjitvwRXF877vcvrXWJpC9pu57KneeynfyVVo9sMVrAKbEVsyXekGBsJJiQDCEgxDZi2uuPtd",
+      "timestamp": "2025-09-29T21:43:21Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "Bc59LCRUjWRKoYVjitvwRXF877vcvrXWJpC9pu57KneeynfyVVo9sMVrAKbEVsyXekGBsJJiQDCEgxDZi2uuPtd",
+      "timestamp": "2025-09-29T21:43:21Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "Bc59LCRUjWRKoYVjitvwRXF877vcvrXWJpC9pu57KneeynfyVVo9sMVrAKbEVsyXekGBsJJiQDCEgxDZi2uuPtd",
+      "timestamp": "2025-09-29T21:43:21Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "35tYuUHSSqcSefhxTQD4zYm7W548uDFPc2JJtKHm99GU14SGnkQJ2AxLYgMk4DpL2w19FiZkwrR2fhTAhbzSBL5x",
+      "timestamp": "2025-10-01T02:44:15Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "transfer_in",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "35tYuUHSSqcSefhxTQD4zYm7W548uDFPc2JJtKHm99GU14SGnkQJ2AxLYgMk4DpL2w19FiZkwrR2fhTAhbzSBL5x",
+      "timestamp": "2025-10-01T02:44:15Z",
+      "source": "helius",
+      "chain": "solana",
+      "tx_type": "sell",
+      "wallet": "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+      "assets": [
+        "EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V"
+      ],
+      "reasons": [
+        "address_like_asset_symbol"
+      ]
+    },
+    {
+      "id": "0x7921b8fdeddb70a5e4f395757a1f0022e831b33ad00383d15a223e54b751b501",
+      "timestamp": "2025-10-19T00:03:34Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ARB | T.ME/S/CLAIMARB | GET REWARD"
+      ],
+      "reasons": [
+        "whitespace_in_asset_symbol"
+      ]
+    },
+    {
+      "id": "0x1e2ef81d438f1827a356e31007766eab9bbc756a2949681296d3300f7417bce0",
+      "timestamp": "2025-11-09T19:58:37Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "assets": [
+        "ARB | T.ME/S/ARB_POOL | CLAIM REWARD"
+      ],
+      "reasons": [
+        "whitespace_in_asset_symbol"
+      ]
+    }
+  ]
+}

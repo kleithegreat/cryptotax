@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "0x1e2ef81d438f1827a356e31007766eab9bbc756a2949681296d3300f7417bce0",
+      "timestamp": "2025-11-09T19:58:37Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "counterparty": "0x912ce59144191c1204e64559fe8253a0e49e6548",
+      "sent": null,
+      "received": {
+        "asset": "ARB | T.ME/S/ARB_POOL | CLAIM REWARD",
+        "amount": "3350",
+        "usd_value": "0"
+      },
+      "fee": null,
+      "raw_type": "airdrop(address[] recipient)"
+    }
+  ]
+}

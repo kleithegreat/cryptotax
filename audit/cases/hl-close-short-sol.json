@@ -1,0 +1,96 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e",
+      "timestamp": "2025-10-12T01:13:27Z",
+      "source": "hyperliquid",
+      "chain": "hyperliquid",
+      "tx_type": "sell",
+      "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
+      "counterparty": null,
+      "sent": {
+        "asset": "SOL",
+        "amount": "11.5",
+        "usd_value": "1997.32000000"
+      },
+      "received": null,
+      "fee": {
+        "asset": "USDC",
+        "amount": "2.860162",
+        "usd_value": "2.860162"
+      },
+      "raw_type": "Close Short"
+    },
+    {
+      "id": "0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e",
+      "timestamp": "2025-10-12T01:13:27Z",
+      "source": "hyperliquid",
+      "chain": "hyperliquid",
+      "tx_type": "sell",
+      "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
+      "counterparty": null,
+      "sent": {
+        "asset": "SOL",
+        "amount": "17.27",
+        "usd_value": "2999.62630000"
+      },
+      "received": null,
+      "fee": {
+        "asset": "USDC",
+        "amount": "4.295463",
+        "usd_value": "4.295463"
+      },
+      "raw_type": "Close Short"
+    },
+    {
+      "id": "0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e",
+      "timestamp": "2025-10-12T01:13:27Z",
+      "source": "hyperliquid",
+      "chain": "hyperliquid",
+      "tx_type": "sell",
+      "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
+      "counterparty": null,
+      "sent": {
+        "asset": "SOL",
+        "amount": "0.17",
+        "usd_value": "29.52900000"
+      },
+      "received": null,
+      "fee": {
+        "asset": "USDC",
+        "amount": "0.042285",
+        "usd_value": "0.042285"
+      },
+      "raw_type": "Close Short"
+    },
+    {
+      "id": "0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e",
+      "timestamp": "2025-10-12T01:13:27Z",
+      "source": "hyperliquid",
+      "chain": "hyperliquid",
+      "tx_type": "sell",
+      "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
+      "counterparty": null,
+      "sent": {
+        "asset": "SOL",
+        "amount": "2.4",
+        "usd_value": "416.88000000"
+      },
+      "received": null,
+      "fee": {
+        "asset": "USDC",
+        "amount": "0.596972",
+        "usd_value": "0.596972"
+      },
+      "raw_type": "Close Short"
+    }
+  ]
+}

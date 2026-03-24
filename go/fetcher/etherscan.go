@@ -22,6 +22,7 @@ type Etherscan struct {
 	Chain   types.Chain
 	Client  *http.Client
 	BaseURL string
+	Sleep   func(time.Duration)
 }
 
 func NewEtherscan(apiKey string, chainID int, chain types.Chain) *Etherscan {
@@ -31,6 +32,7 @@ func NewEtherscan(apiKey string, chainID int, chain types.Chain) *Etherscan {
 		Chain:   chain,
 		Client:  &http.Client{Timeout: 30 * time.Second},
 		BaseURL: "https://api.etherscan.io/v2/api",
+		Sleep:   time.Sleep,
 	}
 }
 
@@ -60,7 +62,11 @@ type etherscanTx struct {
 	TokenDecimal string `json:"tokenDecimal"`
 }
 
-const etherscanPageSize = 1000
+const (
+	etherscanPageSize           = 1000
+	etherscanRateLimitBackoff   = time.Second
+	etherscanRateLimitMaxRetrys = 4
+)
 
 func (e *Etherscan) Fetch(wallet string) ([]RawTransaction, error) {
 	var allTxs []RawTransaction
@@ -118,75 +124,105 @@ func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction
 	query.Set("apikey", e.APIKey)
 	endpoint.RawQuery = query.Encode()
 
-	resp, err := e.Client.Get(endpoint.String())
-	if err != nil {
-		return nil, false, fmt.Errorf("%s %s request failed: %w", e.Chain, action, err)
-	}
-	defer resp.Body.Close()
+	for attempt := 0; ; attempt++ {
+		resp, err := e.Client.Get(endpoint.String())
+		if err != nil {
+			return nil, false, fmt.Errorf("%s %s request failed: %w", e.Chain, action, err)
+		}
 
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return nil, false, fmt.Errorf("%s %s response read failed: %w", e.Chain, action, err)
-	}
+		body, readErr := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if readErr != nil {
+			return nil, false, fmt.Errorf("%s %s response read failed: %w", e.Chain, action, readErr)
+		}
 
-	if resp.StatusCode != http.StatusOK {
-		return nil, false, fmt.Errorf(
-			"%s %s HTTP error: status_code=%d body=%s",
-			e.Chain,
-			action,
-			resp.StatusCode,
-			compactJSONSnippet(body),
-		)
-	}
-
-	var envelope etherscanResp
-	if err := json.Unmarshal(body, &envelope); err != nil {
-		return nil, false, fmt.Errorf("%s %s JSON parse failed: %w", e.Chain, action, err)
-	}
-
-	result, exhausted, err := parseEtherscanResult(envelope)
-	if err != nil {
-		return nil, false, fmt.Errorf("%s %s API error: %w", e.Chain, action, err)
-	}
-
-	var txs []RawTransaction
-	for _, tx := range result {
-		if tx.IsError == "1" {
+		if resp.StatusCode == http.StatusTooManyRequests && attempt < etherscanRateLimitMaxRetrys {
+			e.sleep(etherscanRetryDelay(attempt))
 			continue
 		}
 
-		timestamp, err := strconv.ParseInt(tx.TimeStamp, 10, 64)
+		if resp.StatusCode != http.StatusOK {
+			return nil, false, fmt.Errorf(
+				"%s %s HTTP error: status_code=%d body=%s",
+				e.Chain,
+				action,
+				resp.StatusCode,
+				compactJSONSnippet(body),
+			)
+		}
+
+		var envelope etherscanResp
+		if err := json.Unmarshal(body, &envelope); err != nil {
+			return nil, false, fmt.Errorf("%s %s JSON parse failed: %w", e.Chain, action, err)
+		}
+
+		result, exhausted, err := parseEtherscanResult(envelope)
 		if err != nil {
-			return nil, false, fmt.Errorf("%s %s invalid timestamp %q for tx %s", e.Chain, action, tx.TimeStamp, tx.Hash)
+			if isEtherscanRateLimitError(err) && attempt < etherscanRateLimitMaxRetrys {
+				e.sleep(etherscanRetryDelay(attempt))
+				continue
+			}
+			return nil, false, fmt.Errorf("%s %s API error: %w", e.Chain, action, err)
 		}
 
-		raw := RawTransaction{
-			ID:        tx.Hash,
-			Timestamp: timestamp,
-			Source:    types.SourceEtherscan,
-			Chain:     e.Chain,
-			Wallet:    wallet,
-			FromAddr:  tx.From,
-			ToAddr:    tx.To,
-			FeeAsset:  "ETH",
-			RawType:   tx.FunctionName,
+		var txs []RawTransaction
+		for _, tx := range result {
+			if tx.IsError == "1" {
+				continue
+			}
+
+			timestamp, err := strconv.ParseInt(tx.TimeStamp, 10, 64)
+			if err != nil {
+				return nil, false, fmt.Errorf("%s %s invalid timestamp %q for tx %s", e.Chain, action, tx.TimeStamp, tx.Hash)
+			}
+
+			raw := RawTransaction{
+				ID:        tx.Hash,
+				Timestamp: timestamp,
+				Source:    types.SourceEtherscan,
+				Chain:     e.Chain,
+				Wallet:    wallet,
+				FromAddr:  tx.From,
+				ToAddr:    tx.To,
+				FeeAsset:  "ETH",
+				RawType:   tx.FunctionName,
+			}
+
+			// Gas fee = gasUsed * gasPrice (in wei), converted to ether.
+			raw.Fee = weiToEther(multiplyBigInts(tx.GasUsed, tx.GasPrice))
+
+			if action == "tokentx" {
+				raw.Asset = tx.TokenSymbol
+				raw.Amount = tokenToDecimal(tx.Value, tx.TokenDecimal)
+			} else {
+				raw.Asset = "ETH"
+				raw.Amount = weiToEther(tx.Value)
+			}
+
+			txs = append(txs, raw)
 		}
 
-		// Gas fee = gasUsed * gasPrice (in wei), converted to ether.
-		raw.Fee = weiToEther(multiplyBigInts(tx.GasUsed, tx.GasPrice))
-
-		if action == "tokentx" {
-			raw.Asset = tx.TokenSymbol
-			raw.Amount = tokenToDecimal(tx.Value, tx.TokenDecimal)
-		} else {
-			raw.Asset = "ETH"
-			raw.Amount = weiToEther(tx.Value)
-		}
-
-		txs = append(txs, raw)
+		return txs, exhausted || len(result) < etherscanPageSize, nil
 	}
+}
 
-	return txs, exhausted || len(result) < etherscanPageSize, nil
+func (e *Etherscan) sleep(delay time.Duration) {
+	if e.Sleep != nil {
+		e.Sleep(delay)
+		return
+	}
+	time.Sleep(delay)
+}
+
+func etherscanRetryDelay(attempt int) time.Duration {
+	return time.Duration(attempt+1) * etherscanRateLimitBackoff
+}
+
+func isEtherscanRateLimitError(err error) bool {
+	message := strings.ToLower(err.Error())
+	return strings.Contains(message, "rate limit") ||
+		strings.Contains(message, "max calls per sec") ||
+		strings.Contains(message, "too many requests")
 }
 
 func parseEtherscanResult(envelope etherscanResp) ([]etherscanTx, bool, error) {

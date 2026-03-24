@@ -1,0 +1,33 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "0xc86dc8fdba8973c6c9e7042cfc31f70201ad00e3558c92986c367450798d4db1",
+      "timestamp": "2025-10-07T01:45:53Z",
+      "source": "hyperliquid",
+      "chain": "hyperliquid",
+      "tx_type": "sell",
+      "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
+      "counterparty": null,
+      "sent": {
+        "asset": "BTC",
+        "amount": "0.0004",
+        "usd_value": "49.93240000"
+      },
+      "received": null,
+      "fee": {
+        "asset": "USDC",
+        "amount": "0.022469",
+        "usd_value": "0.022469"
+      },
+      "raw_type": "Close Long"
+    }
+  ]
+}
