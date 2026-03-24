@@ -15,15 +15,27 @@ import (
 //  1. Same asset
 //  2. Amounts within 1% of each other (gas fees cause slight differences)
 //  3. Timestamps within 30 minutes of each other
-//  4. One is transfer_out/sell, the other is transfer_in/income
+//  4. Counterparties explicitly point at the other owned wallet
+//
+// TODO: Cross-chain bridges and same-hash DEX swaps need richer modeling than
+// this address-level matcher. Keep this conservative so ordinary sells/income
+// are not silently relabeled as non-taxable transfers.
 func MatchTransfers(txs []types.Transaction, wallets []string) []types.Transaction {
+	ownWallets := make(map[string]struct{}, len(wallets))
+	for _, wallet := range wallets {
+		ownWallets[strings.ToLower(wallet)] = struct{}{}
+	}
+
 	matched := make(map[int]bool)
 
 	for i := range txs {
-		if txs[i].TxType != types.TxTransferOut && txs[i].TxType != types.TxSell {
+		if txs[i].TxType != types.TxTransferOut {
 			continue
 		}
 		if txs[i].Sent == nil {
+			continue
+		}
+		if !isOwnWalletRef(ownWallets, txs[i].Wallet) || !isOwnCounterparty(ownWallets, txs[i].Counterparty) {
 			continue
 		}
 
@@ -32,10 +44,16 @@ func MatchTransfers(txs []types.Transaction, wallets []string) []types.Transacti
 				continue
 			}
 
-			if txs[j].TxType != types.TxIncome && txs[j].TxType != types.TxTransferIn {
+			if txs[j].TxType != types.TxTransferIn {
 				continue
 			}
 			if txs[j].Received == nil {
+				continue
+			}
+			if !isOwnWalletRef(ownWallets, txs[j].Wallet) || !isOwnCounterparty(ownWallets, txs[j].Counterparty) {
+				continue
+			}
+			if !counterpartiesMatch(txs[i], txs[j]) {
 				continue
 			}
 
@@ -52,8 +70,6 @@ func MatchTransfers(txs []types.Transaction, wallets []string) []types.Transacti
 				continue
 			}
 
-			txs[i].TxType = types.TxTransferOut
-			txs[j].TxType = types.TxTransferIn
 			matched[i] = true
 			matched[j] = true
 			break
@@ -61,6 +77,27 @@ func MatchTransfers(txs []types.Transaction, wallets []string) []types.Transacti
 	}
 
 	return txs
+}
+
+func isOwnWalletRef(ownWallets map[string]struct{}, wallet string) bool {
+	_, ok := ownWallets[strings.ToLower(wallet)]
+	return ok
+}
+
+func isOwnCounterparty(ownWallets map[string]struct{}, counterparty *string) bool {
+	if counterparty == nil {
+		return false
+	}
+	_, ok := ownWallets[strings.ToLower(*counterparty)]
+	return ok
+}
+
+func counterpartiesMatch(left, right types.Transaction) bool {
+	if left.Counterparty == nil || right.Counterparty == nil {
+		return false
+	}
+	return strings.EqualFold(*left.Counterparty, right.Wallet) &&
+		strings.EqualFold(*right.Counterparty, left.Wallet)
 }
 
 // amountsClose checks if two decimal string amounts are within the given

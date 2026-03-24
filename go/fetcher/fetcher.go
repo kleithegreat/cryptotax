@@ -19,9 +19,10 @@ type Fetcher interface {
 // Each fetcher populates the fields it can; the normalizer interprets them.
 type RawTransaction struct {
 	ID        string
-	Timestamp int64  // unix seconds
+	Timestamp int64 // unix seconds
 	Source    types.Source
 	Chain     types.Chain
+	Wallet    string // the user wallet that this source row belongs to
 
 	// Token movements — not all fields are populated for every chain.
 	FromAddr string

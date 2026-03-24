@@ -6,7 +6,9 @@ import (
 	"io"
 	"math/big"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/kevin/cryptotax/types"
@@ -19,6 +21,7 @@ type Etherscan struct {
 	ChainID int
 	Chain   types.Chain
 	Client  *http.Client
+	BaseURL string
 }
 
 func NewEtherscan(apiKey string, chainID int, chain types.Chain) *Etherscan {
@@ -27,6 +30,7 @@ func NewEtherscan(apiKey string, chainID int, chain types.Chain) *Etherscan {
 		ChainID: chainID,
 		Chain:   chain,
 		Client:  &http.Client{Timeout: 30 * time.Second},
+		BaseURL: "https://api.etherscan.io/v2/api",
 	}
 }
 
@@ -35,9 +39,9 @@ func (e *Etherscan) Name() string {
 }
 
 type etherscanResp struct {
-	Status  string        `json:"status"`
-	Message string        `json:"message"`
-	Result  []etherscanTx `json:"result"`
+	Status  string          `json:"status"`
+	Message string          `json:"message"`
+	Result  json.RawMessage `json:"result"`
 }
 
 type etherscanTx struct {
@@ -55,6 +59,8 @@ type etherscanTx struct {
 	TokenSymbol  string `json:"tokenSymbol"`
 	TokenDecimal string `json:"tokenDecimal"`
 }
+
+const etherscanPageSize = 1000
 
 func (e *Etherscan) Fetch(wallet string) ([]RawTransaction, error) {
 	var allTxs []RawTransaction
@@ -77,40 +83,81 @@ func (e *Etherscan) Fetch(wallet string) ([]RawTransaction, error) {
 }
 
 func (e *Etherscan) fetchEndpoint(wallet, action string) ([]RawTransaction, error) {
-	url := fmt.Sprintf(
-		"https://api.etherscan.io/v2/api?chainid=%d&module=account&action=%s&address=%s&startblock=0&endblock=99999999&sort=asc&apikey=%s",
-		e.ChainID, action, wallet, e.APIKey,
-	)
+	var allTxs []RawTransaction
 
-	resp, err := e.Client.Get(url)
+	for page := 1; ; page++ {
+		pageTxs, exhausted, err := e.fetchPage(wallet, action, page)
+		if err != nil {
+			return nil, err
+		}
+		allTxs = append(allTxs, pageTxs...)
+		if exhausted {
+			break
+		}
+	}
+
+	return allTxs, nil
+}
+
+func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction, bool, error) {
+	endpoint, err := url.Parse(e.BaseURL)
 	if err != nil {
-		return nil, fmt.Errorf("HTTP request failed: %w", err)
+		return nil, false, fmt.Errorf("invalid Etherscan base URL %q: %w", e.BaseURL, err)
+	}
+
+	query := endpoint.Query()
+	query.Set("chainid", strconv.Itoa(e.ChainID))
+	query.Set("module", "account")
+	query.Set("action", action)
+	query.Set("address", wallet)
+	query.Set("startblock", "0")
+	query.Set("endblock", "99999999")
+	query.Set("sort", "asc")
+	query.Set("page", strconv.Itoa(page))
+	query.Set("offset", strconv.Itoa(etherscanPageSize))
+	query.Set("apikey", e.APIKey)
+	endpoint.RawQuery = query.Encode()
+
+	resp, err := e.Client.Get(endpoint.String())
+	if err != nil {
+		return nil, false, fmt.Errorf("%s %s request failed: %w", e.Chain, action, err)
 	}
 	defer resp.Body.Close()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
-		return nil, fmt.Errorf("reading response body: %w", err)
+		return nil, false, fmt.Errorf("%s %s response read failed: %w", e.Chain, action, err)
 	}
 
-	var result etherscanResp
-	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("parsing JSON: %w", err)
+	if resp.StatusCode != http.StatusOK {
+		return nil, false, fmt.Errorf(
+			"%s %s HTTP error: status_code=%d body=%s",
+			e.Chain,
+			action,
+			resp.StatusCode,
+			compactJSONSnippet(body),
+		)
 	}
 
-	if result.Status != "1" {
-		return nil, fmt.Errorf("API error: %s", result.Message)
+	var envelope etherscanResp
+	if err := json.Unmarshal(body, &envelope); err != nil {
+		return nil, false, fmt.Errorf("%s %s JSON parse failed: %w", e.Chain, action, err)
+	}
+
+	result, exhausted, err := parseEtherscanResult(envelope)
+	if err != nil {
+		return nil, false, fmt.Errorf("%s %s API error: %w", e.Chain, action, err)
 	}
 
 	var txs []RawTransaction
-	for _, tx := range result.Result {
+	for _, tx := range result {
 		if tx.IsError == "1" {
 			continue
 		}
 
 		timestamp, err := strconv.ParseInt(tx.TimeStamp, 10, 64)
 		if err != nil {
-			continue
+			return nil, false, fmt.Errorf("%s %s invalid timestamp %q for tx %s", e.Chain, action, tx.TimeStamp, tx.Hash)
 		}
 
 		raw := RawTransaction{
@@ -118,21 +165,20 @@ func (e *Etherscan) fetchEndpoint(wallet, action string) ([]RawTransaction, erro
 			Timestamp: timestamp,
 			Source:    types.SourceEtherscan,
 			Chain:     e.Chain,
+			Wallet:    wallet,
 			FromAddr:  tx.From,
 			ToAddr:    tx.To,
 			FeeAsset:  "ETH",
 			RawType:   tx.FunctionName,
 		}
 
-		// Gas fee = gasUsed * gasPrice (in wei), converted to ether
+		// Gas fee = gasUsed * gasPrice (in wei), converted to ether.
 		raw.Fee = weiToEther(multiplyBigInts(tx.GasUsed, tx.GasPrice))
 
 		if action == "tokentx" {
-			// ERC-20: use token symbol and convert value using token decimals
 			raw.Asset = tx.TokenSymbol
 			raw.Amount = tokenToDecimal(tx.Value, tx.TokenDecimal)
 		} else {
-			// Normal ETH tx: convert value from wei to ether
 			raw.Asset = "ETH"
 			raw.Amount = weiToEther(tx.Value)
 		}
@@ -140,7 +186,73 @@ func (e *Etherscan) fetchEndpoint(wallet, action string) ([]RawTransaction, erro
 		txs = append(txs, raw)
 	}
 
-	return txs, nil
+	return txs, exhausted || len(result) < etherscanPageSize, nil
+}
+
+func parseEtherscanResult(envelope etherscanResp) ([]etherscanTx, bool, error) {
+	trimmed := strings.TrimSpace(string(envelope.Result))
+	if trimmed == "" || trimmed == "null" {
+		if envelope.Status == "1" {
+			return nil, true, nil
+		}
+		return nil, true, fmt.Errorf(
+			"status=%q message=%q result=%q",
+			envelope.Status,
+			envelope.Message,
+			"",
+		)
+	}
+
+	if strings.HasPrefix(trimmed, "\"") {
+		var resultText string
+		if err := json.Unmarshal(envelope.Result, &resultText); err != nil {
+			return nil, true, fmt.Errorf("status=%q message=%q result=%s", envelope.Status, envelope.Message, trimmed)
+		}
+		if isEtherscanEmptyResult(envelope.Message, resultText) {
+			return nil, true, nil
+		}
+		return nil, true, fmt.Errorf(
+			"status=%q message=%q result=%q",
+			envelope.Status,
+			envelope.Message,
+			resultText,
+		)
+	}
+
+	var txs []etherscanTx
+	if err := json.Unmarshal(envelope.Result, &txs); err != nil {
+		return nil, false, fmt.Errorf(
+			"status=%q message=%q result=%s parse_error=%v",
+			envelope.Status,
+			envelope.Message,
+			compactJSONSnippet(envelope.Result),
+			err,
+		)
+	}
+
+	if envelope.Status != "1" && !isEtherscanEmptyResult(envelope.Message, trimmed) {
+		return nil, false, fmt.Errorf(
+			"status=%q message=%q result=%s",
+			envelope.Status,
+			envelope.Message,
+			compactJSONSnippet(envelope.Result),
+		)
+	}
+
+	return txs, len(txs) == 0, nil
+}
+
+func isEtherscanEmptyResult(message, result string) bool {
+	combined := strings.ToLower(strings.TrimSpace(message + " " + result))
+	return strings.Contains(combined, "no transactions found") || strings.Contains(combined, "no records found")
+}
+
+func compactJSONSnippet(body []byte) string {
+	trimmed := strings.TrimSpace(string(body))
+	if len(trimmed) <= 240 {
+		return trimmed
+	}
+	return trimmed[:240] + "..."
 }
 
 // weiToEther converts a wei string to ether (divide by 1e18).

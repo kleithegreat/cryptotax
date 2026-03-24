@@ -121,14 +121,14 @@ func (h *Helius) getSignatures(wallet string) ([]string, error) {
 
 // Enhanced Transactions API response types
 type heliusEnhancedTx struct {
-	Signature       string                  `json:"signature"`
-	Type            string                  `json:"type"`
-	Source          string                  `json:"source"`
-	Fee             int64                   `json:"fee"`
-	Timestamp       int64                   `json:"timestamp"`
-	TokenTransfers  []heliusTokenTransfer   `json:"tokenTransfers"`
-	NativeTransfers []heliusNativeTransfer  `json:"nativeTransfers"`
-	Description     string                  `json:"description"`
+	Signature       string                 `json:"signature"`
+	Type            string                 `json:"type"`
+	Source          string                 `json:"source"`
+	Fee             int64                  `json:"fee"`
+	Timestamp       int64                  `json:"timestamp"`
+	TokenTransfers  []heliusTokenTransfer  `json:"tokenTransfers"`
+	NativeTransfers []heliusNativeTransfer `json:"nativeTransfers"`
+	Description     string                 `json:"description"`
 }
 
 type heliusTokenTransfer struct {
@@ -172,35 +172,35 @@ func convertHeliusTx(etx heliusEnhancedTx, wallet string) []RawTransaction {
 
 	switch etx.Type {
 	case "SWAP":
-		return convertSwap(etx, walletLower, feeSOL)
+		return convertSwap(etx, wallet, walletLower, feeSOL)
 	case "TRANSFER":
-		return convertTransfer(etx, walletLower, feeSOL)
+		return convertTransfer(etx, wallet, walletLower, feeSOL)
 	default:
 		// Other types (NFT, COMPRESSED_NFT, etc.): extract relevant token movements
-		return convertGeneric(etx, walletLower, feeSOL)
+		return convertGeneric(etx, wallet, walletLower, feeSOL)
 	}
 }
 
-func convertSwap(etx heliusEnhancedTx, wallet, feeSOL string) []RawTransaction {
+func convertSwap(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []RawTransaction {
 	var sentAsset, rcvAsset string
 	var sentAmt, rcvAmt string
 
 	for _, tt := range etx.TokenTransfers {
-		if strings.ToLower(tt.FromUserAccount) == wallet {
+		if strings.ToLower(tt.FromUserAccount) == walletLower {
 			sentAsset = tt.Mint
 			sentAmt = formatTokenAmount(tt.TokenAmount)
 		}
-		if strings.ToLower(tt.ToUserAccount) == wallet {
+		if strings.ToLower(tt.ToUserAccount) == walletLower {
 			rcvAsset = tt.Mint
 			rcvAmt = formatTokenAmount(tt.TokenAmount)
 		}
 	}
 	for _, nt := range etx.NativeTransfers {
-		if strings.ToLower(nt.FromUserAccount) == wallet && nt.Amount > 0 {
+		if strings.ToLower(nt.FromUserAccount) == walletLower && nt.Amount > 0 {
 			sentAsset = "SOL"
 			sentAmt = lamportsToSOL(nt.Amount)
 		}
-		if strings.ToLower(nt.ToUserAccount) == wallet && nt.Amount > 0 {
+		if strings.ToLower(nt.ToUserAccount) == walletLower && nt.Amount > 0 {
 			rcvAsset = "SOL"
 			rcvAmt = lamportsToSOL(nt.Amount)
 		}
@@ -215,6 +215,7 @@ func convertSwap(etx heliusEnhancedTx, wallet, feeSOL string) []RawTransaction {
 		Timestamp: etx.Timestamp,
 		Source:    types.SourceHelius,
 		Chain:     types.ChainSolana,
+		Wallet:    wallet,
 		Asset:     sentAsset,
 		Amount:    sentAmt,
 		Asset2:    rcvAsset,
@@ -225,21 +226,23 @@ func convertSwap(etx heliusEnhancedTx, wallet, feeSOL string) []RawTransaction {
 	}}
 }
 
-func convertTransfer(etx heliusEnhancedTx, wallet, feeSOL string) []RawTransaction {
+func convertTransfer(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []RawTransaction {
 	var txs []RawTransaction
 
 	for _, tt := range etx.TokenTransfers {
+		if !walletTouchesTransfer(walletLower, tt.FromUserAccount, tt.ToUserAccount) {
+			continue
+		}
 		raw := RawTransaction{
 			ID:        etx.Signature,
 			Timestamp: etx.Timestamp,
 			Source:    types.SourceHelius,
 			Chain:     types.ChainSolana,
+			Wallet:    wallet,
 			FromAddr:  tt.FromUserAccount,
 			ToAddr:    tt.ToUserAccount,
 			Asset:     tt.Mint,
 			Amount:    formatTokenAmount(tt.TokenAmount),
-			Fee:       feeSOL,
-			FeeAsset:  "SOL",
 			RawType:   "TRANSFER",
 		}
 		txs = append(txs, raw)
@@ -249,30 +252,7 @@ func convertTransfer(etx heliusEnhancedTx, wallet, feeSOL string) []RawTransacti
 		if nt.Amount == 0 {
 			continue
 		}
-		raw := RawTransaction{
-			ID:        etx.Signature,
-			Timestamp: etx.Timestamp,
-			Source:    types.SourceHelius,
-			Chain:     types.ChainSolana,
-			FromAddr:  nt.FromUserAccount,
-			ToAddr:    nt.ToUserAccount,
-			Asset:     "SOL",
-			Amount:    lamportsToSOL(nt.Amount),
-			Fee:       feeSOL,
-			FeeAsset:  "SOL",
-			RawType:   "TRANSFER",
-		}
-		txs = append(txs, raw)
-	}
-
-	return txs
-}
-
-func convertGeneric(etx heliusEnhancedTx, wallet, feeSOL string) []RawTransaction {
-	var txs []RawTransaction
-
-	for _, tt := range etx.TokenTransfers {
-		if strings.ToLower(tt.FromUserAccount) != wallet && strings.ToLower(tt.ToUserAccount) != wallet {
+		if !walletTouchesTransfer(walletLower, nt.FromUserAccount, nt.ToUserAccount) {
 			continue
 		}
 		raw := RawTransaction{
@@ -280,18 +260,61 @@ func convertGeneric(etx heliusEnhancedTx, wallet, feeSOL string) []RawTransactio
 			Timestamp: etx.Timestamp,
 			Source:    types.SourceHelius,
 			Chain:     types.ChainSolana,
+			Wallet:    wallet,
+			FromAddr:  nt.FromUserAccount,
+			ToAddr:    nt.ToUserAccount,
+			Asset:     "SOL",
+			Amount:    lamportsToSOL(nt.Amount),
+			RawType:   "TRANSFER",
+		}
+		txs = append(txs, raw)
+	}
+
+	return attachFeeToPrimaryHeliusRow(txs, wallet, feeSOL)
+}
+
+func convertGeneric(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []RawTransaction {
+	var txs []RawTransaction
+
+	for _, tt := range etx.TokenTransfers {
+		if !walletTouchesTransfer(walletLower, tt.FromUserAccount, tt.ToUserAccount) {
+			continue
+		}
+		raw := RawTransaction{
+			ID:        etx.Signature,
+			Timestamp: etx.Timestamp,
+			Source:    types.SourceHelius,
+			Chain:     types.ChainSolana,
+			Wallet:    wallet,
 			FromAddr:  tt.FromUserAccount,
 			ToAddr:    tt.ToUserAccount,
 			Asset:     tt.Mint,
 			Amount:    formatTokenAmount(tt.TokenAmount),
-			Fee:       feeSOL,
-			FeeAsset:  "SOL",
 			RawType:   etx.Type,
 		}
 		txs = append(txs, raw)
 	}
 
-	return txs
+	for _, nt := range etx.NativeTransfers {
+		if nt.Amount == 0 || !walletTouchesTransfer(walletLower, nt.FromUserAccount, nt.ToUserAccount) {
+			continue
+		}
+		raw := RawTransaction{
+			ID:        etx.Signature,
+			Timestamp: etx.Timestamp,
+			Source:    types.SourceHelius,
+			Chain:     types.ChainSolana,
+			Wallet:    wallet,
+			FromAddr:  nt.FromUserAccount,
+			ToAddr:    nt.ToUserAccount,
+			Asset:     "SOL",
+			Amount:    lamportsToSOL(nt.Amount),
+			RawType:   etx.Type,
+		}
+		txs = append(txs, raw)
+	}
+
+	return attachFeeToPrimaryHeliusRow(txs, wallet, feeSOL)
 }
 
 func (h *Helius) post(url string, body interface{}) ([]byte, error) {
@@ -329,4 +352,28 @@ func lamportsToSOL(lamports int64) string {
 
 func formatTokenAmount(amount float64) string {
 	return new(big.Float).SetFloat64(amount).Text('f', 9)
+}
+
+func walletTouchesTransfer(wallet, from, to string) bool {
+	wallet = strings.ToLower(wallet)
+	return strings.ToLower(from) == wallet || strings.ToLower(to) == wallet
+}
+
+func attachFeeToPrimaryHeliusRow(txs []RawTransaction, wallet, feeSOL string) []RawTransaction {
+	if feeSOL == "" || len(txs) == 0 {
+		return txs
+	}
+
+	wallet = strings.ToLower(wallet)
+	for i := range txs {
+		if strings.ToLower(txs[i].FromAddr) == wallet {
+			// Attach the full network fee to the first outbound row for this
+			// signature so total fees stay conserved across multi-row parses.
+			txs[i].Fee = feeSOL
+			txs[i].FeeAsset = "SOL"
+			break
+		}
+	}
+
+	return txs
 }

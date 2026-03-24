@@ -30,21 +30,41 @@ func main() {
 	)
 
 	rootCmd := &cobra.Command{
-		Use:   "cryptotax",
-		Short: "Crypto tax report generator",
-		Long:  "Fetches transaction history from multiple chains, normalizes it, and runs it through the Haskell financial core to produce IRS Form 8949 reports.",
+		Use:          "cryptotax",
+		Short:        "Crypto tax report generator",
+		Long:         "Fetches transaction history from multiple chains, normalizes it, and runs it through the Haskell financial core to produce IRS Form 8949 reports.",
+		SilenceUsage: true,
 	}
 
 	runCmd := &cobra.Command{
-		Use:   "run",
-		Short: "Fetch all transactions and generate tax report",
+		Use:          "run",
+		Short:        "Fetch all transactions and generate tax report",
+		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			var allRaw []fetcher.RawTransaction
 			var wallets []string
+			walletSet := make(map[string]struct{})
+
+			etherscanKey = envOrValue(etherscanKey, "ETHERSCAN_API_KEY")
+			heliusKey = envOrValue(heliusKey, "HELIUS_API_KEY")
+
+			if len(ethWallets) == 0 && len(solWallets) == 0 && len(hlWallets) == 0 && robinhoodCSV == "" {
+				return fmt.Errorf("no input source specified: provide at least one wallet flag or --robinhood-csv")
+			}
+			if len(ethWallets) > 0 && etherscanKey == "" {
+				return fmt.Errorf("etherscan API key required: pass --etherscan-key or set ETHERSCAN_API_KEY")
+			}
+			if len(solWallets) > 0 && heliusKey == "" {
+				return fmt.Errorf("helius API key required: pass --helius-key or set HELIUS_API_KEY")
+			}
 
 			// --- Etherscan (Ethereum + Arbitrum) ---
 			for _, ethWallet := range ethWallets {
-				wallets = append(wallets, ethWallet)
+				ethWallet = strings.TrimSpace(ethWallet)
+				if ethWallet == "" {
+					continue
+				}
+				wallets = appendUniqueWallet(wallets, walletSet, ethWallet)
 
 				ethFetcher := fetcher.NewEtherscan(etherscanKey, 1, types.ChainEthereum)
 				fmt.Fprintf(os.Stderr, "Fetching %s for %s...\n", ethFetcher.Name(), ethWallet)
@@ -65,7 +85,11 @@ func main() {
 
 			// --- Helius (Solana) ---
 			for _, solWallet := range solWallets {
-				wallets = append(wallets, solWallet)
+				solWallet = strings.TrimSpace(solWallet)
+				if solWallet == "" {
+					continue
+				}
+				wallets = appendUniqueWallet(wallets, walletSet, solWallet)
 
 				hFetcher := fetcher.NewHelius(heliusKey)
 				fmt.Fprintf(os.Stderr, "Fetching %s for %s...\n", hFetcher.Name(), solWallet)
@@ -78,7 +102,11 @@ func main() {
 
 			// --- Hyperliquid ---
 			for _, hlWallet := range hlWallets {
-				wallets = append(wallets, hlWallet)
+				hlWallet = strings.TrimSpace(hlWallet)
+				if hlWallet == "" {
+					continue
+				}
+				wallets = appendUniqueWallet(wallets, walletSet, hlWallet)
 
 				hlFetcher := fetcher.NewHyperliquid()
 				fmt.Fprintf(os.Stderr, "Fetching %s for %s...\n", hlFetcher.Name(), hlWallet)
@@ -91,7 +119,7 @@ func main() {
 
 			// --- Robinhood CSV ---
 			if robinhoodCSV != "" {
-				wallets = append(wallets, "robinhood")
+				wallets = appendUniqueWallet(wallets, walletSet, "robinhood")
 
 				rhFetcher := fetcher.NewRobinhood(robinhoodCSV)
 				fmt.Fprintf(os.Stderr, "Fetching %s...\n", rhFetcher.Name())
@@ -160,8 +188,8 @@ func main() {
 	runCmd.Flags().StringVar(&robinhoodCSV, "robinhood-csv", "", "Path to Robinhood 1099 CSV export")
 
 	// API key flags
-	runCmd.Flags().StringVar(&etherscanKey, "etherscan-key", os.Getenv("ETHERSCAN_API_KEY"), "Etherscan API key (or ETHERSCAN_API_KEY env)")
-	runCmd.Flags().StringVar(&heliusKey, "helius-key", os.Getenv("HELIUS_API_KEY"), "Helius API key (or HELIUS_API_KEY env)")
+	runCmd.Flags().StringVar(&etherscanKey, "etherscan-key", "", "Etherscan API key (or ETHERSCAN_API_KEY env)")
+	runCmd.Flags().StringVar(&heliusKey, "helius-key", "", "Helius API key (or HELIUS_API_KEY env)")
 
 	// Output flags
 	runCmd.Flags().StringVar(&coreCmd, "core", "cryptotax-core", "Path to Haskell core binary")
@@ -173,4 +201,26 @@ func main() {
 	if err := rootCmd.Execute(); err != nil {
 		os.Exit(1)
 	}
+}
+
+func envOrValue(value, envKey string) string {
+	if value != "" {
+		return value
+	}
+	return strings.TrimSpace(os.Getenv(envKey))
+}
+
+func appendUniqueWallet(wallets []string, seen map[string]struct{}, wallet string) []string {
+	wallet = strings.TrimSpace(wallet)
+	if wallet == "" {
+		return wallets
+	}
+
+	key := strings.ToLower(wallet)
+	if _, ok := seen[key]; ok {
+		return wallets
+	}
+
+	seen[key] = struct{}{}
+	return append(wallets, wallet)
 }

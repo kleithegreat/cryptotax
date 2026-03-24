@@ -1,8 +1,13 @@
 # cryptotax
 
 A crypto tax report generator that fetches transaction history from multiple
-chains, normalizes it, and runs it through a formally-typed Haskell financial
-core to produce IRS Form 8949 reports.
+chains, normalizes it in Go, and runs it through a formally typed Haskell
+financial core to produce IRS Form 8949 reports.
+
+The Haskell core uses exact `Rational` arithmetic for lot accounting. The Go
+side is deliberately conservative and best-effort: plain transfers are modeled
+well, while richer semantic reconstruction such as multi-leg EVM swaps/bridges
+and Hyperliquid perps still needs explicit review.
 
 ## Architecture
 
@@ -32,39 +37,50 @@ core to produce IRS Form 8949 reports.
 └──────────────────────────────────────────────────┘
 ```
 
-The two binaries communicate via a JSON intermediate representation defined
-in `schema/transactions.json`. All financial amounts are strings — the Go
-side never does arithmetic on them, and the Haskell side parses them into
-exact `Rational` values.
+The two binaries communicate via a JSON intermediate representation defined in
+`schema/transactions.json`. All financial amounts are strings. The Go side
+normalizes source-specific data into that IR, and the Haskell side parses those
+strings into exact `Rational` values.
 
 ## Prerequisites
 
 - [Nix](https://nixos.org/download/) with flakes enabled
-- [direnv](https://direnv.net/) (optional, for automatic shell activation)
+- [direnv](https://direnv.net/) (optional)
 
 ## Getting started
 
 ```bash
-# Clone and enter the dev shell
+# Enter the development shell
 cd cryptotax
-direnv allow    # or: nix develop
+nix develop
+# or: direnv allow
 
-# Copy and fill in your API keys
-cp .env.example .env
-$EDITOR .env
+# Build the binaries
+nix build .#cli
+nix build .#core
 
-# Build both binaries
-make
+# Inspect normalized JSON without invoking the Haskell core
+nix run .#dry-run -- \
+  --eth-wallet 0x... \
+  --sol-wallet ... \
+  --hl-wallet ... \
+  --robinhood-csv path/to/robinhood.csv
 
-# Dry run — fetch and normalize, print JSON without running Haskell core
-make dry-run ETH_WALLET=0x... SOL_WALLET=...
+# Run the full pipeline with the flake-wrapped core binary
+nix run .#run -- \
+  --eth-wallet 0x... \
+  --sol-wallet ... \
+  --hl-wallet ... \
+  --robinhood-csv path/to/robinhood.csv \
+  --output 8949_report.csv
 
-# Full run — fetch, normalize, compute gains, write 8949 CSV
-make run ETH_WALLET=0x... SOL_WALLET=... ROBINHOOD_CSV=data/robinhood.csv
-
-# Run Haskell property tests
-make test
+# Validate the flake outputs and Haskell test suite
+nix flake check
 ```
+
+API keys can be passed explicitly with `--etherscan-key` / `--helius-key` or
+via `ETHERSCAN_API_KEY` / `HELIUS_API_KEY`. The CLI intentionally does not bake
+env-derived secrets into flag defaults, so `--help` output does not echo them.
 
 ## Supported sources
 
@@ -85,8 +101,8 @@ make test
    swap, the FIFO engine pops lots from the oldest acquisition and computes
    gain = proceeds - cost basis.
 
-3. **Transfers**: Movements between your own wallets are matched by the Go layer
-   and marked as non-taxable. Cost basis carries over.
+3. **Transfers**: Clear own-wallet transfers are preserved as non-taxable
+   transfer rows. The core ignores them, which keeps aggregate basis intact.
 
 4. **Holding period**: > 365 days = long-term capital gains rate. Otherwise
    short-term (taxed as ordinary income).
@@ -94,12 +110,20 @@ make test
 5. **Output**: Form 8949 CSV with one row per disposal, ready for TurboTax /
    TaxAct / H&R Block import.
 
+## Nix outputs
+
+- `packages.cli`: Go CLI binary
+- `packages.core`: Haskell financial core
+- `apps.run`: wrapper that runs the Go CLI with `--core` pointed at the flake-built Haskell binary
+- `apps.dry-run`: wrapper that runs the Go CLI with `--dry-run`
+- `checks`: Go build, Haskell build, Haskell test suite
+- `devShell`: Go + Haskell development environment
+
 ## Project structure
 
 ```
 cryptotax/
-├── flake.nix                 # Nix dev shell + package builds
-├── Makefile                  # Build orchestration
+├── flake.nix                 # Flake packages, apps, checks, and dev shell
 ├── schema/
 │   └── transactions.json     # JSON Schema (Go→Haskell contract)
 ├── go/
@@ -118,6 +142,12 @@ cryptotax/
     │   └── Report.hs         # Form 8949 CSV output
     └── test/Spec.hs          # QuickCheck properties
 ```
+
+## Known limitations
+
+- EVM swaps and bridges are not fully reconstructed from per-address Etherscan rows yet; inbound legs are treated conservatively instead of guessed into taxable income.
+- Hyperliquid perp activity is still approximated onto the current IR; funding receipts are modeled, but full position/PnL accounting needs richer semantics.
+- Source APIs can omit metadata or use token symbols that do not yet map cleanly to historical price lookups. Those rows fall back to `"0"` USD values instead of inventing prices.
 
 ## Disclaimer
 

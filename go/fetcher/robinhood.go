@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/kevin/cryptotax/types"
 )
@@ -25,20 +26,20 @@ func (r *Robinhood) Name() string { return "robinhood" }
 
 // cryptoNames maps common crypto descriptions to ticker symbols.
 var cryptoNames = map[string]string{
-	"BITCOIN":  "BTC",
-	"ETHEREUM": "ETH",
-	"SOLANA":   "SOL",
-	"DOGECOIN": "DOGE",
+	"BITCOIN":   "BTC",
+	"ETHEREUM":  "ETH",
+	"SOLANA":    "SOL",
+	"DOGECOIN":  "DOGE",
 	"AVALANCHE": "AVAX",
-	"CARDANO":  "ADA",
+	"CARDANO":   "ADA",
 	"CHAINLINK": "LINK",
-	"UNISWAP":  "UNI",
-	"AAVE":     "AAVE",
-	"POLYGON":  "MATIC",
+	"UNISWAP":   "UNI",
+	"AAVE":      "AAVE",
+	"POLYGON":   "MATIC",
 	"SHIBA INU": "SHIB",
-	"XRP":      "XRP",
-	"USDC":     "USDC",
-	"USDT":     "USDT",
+	"XRP":       "XRP",
+	"USDC":      "USDC",
+	"USDT":      "USDT",
 }
 
 func (r *Robinhood) Fetch(_ string) ([]RawTransaction, error) {
@@ -69,7 +70,7 @@ func (r *Robinhood) parse1099DA(records [][]string) ([]RawTransaction, error) {
 	var txs []RawTransaction
 
 	inSection := false
-	for _, row := range records {
+	for rowNum, row := range records {
 		if len(row) == 0 {
 			continue
 		}
@@ -88,7 +89,10 @@ func (r *Robinhood) parse1099DA(records [][]string) ([]RawTransaction, error) {
 
 		// Data rows in the 1099-DA section
 		if recordType == "1099-DA" && inSection && colIdx != nil {
-			tx, ok := r.parseDARow(row, colIdx)
+			tx, ok, err := r.parseDARow(row, colIdx)
+			if err != nil {
+				return nil, fmt.Errorf("1099-DA row %d: %w", rowNum+1, err)
+			}
 			if ok {
 				txs = append(txs, tx...)
 			}
@@ -103,7 +107,7 @@ func (r *Robinhood) parse1099DA(records [][]string) ([]RawTransaction, error) {
 	return txs, nil
 }
 
-func (r *Robinhood) parseDARow(row []string, colIdx map[string]int) ([]RawTransaction, bool) {
+func (r *Robinhood) parseDARow(row []string, colIdx map[string]int) ([]RawTransaction, bool, error) {
 	getCol := func(name string) string {
 		idx, ok := colIdx[name]
 		if !ok || idx >= len(row) {
@@ -113,9 +117,9 @@ func (r *Robinhood) parseDARow(row []string, colIdx map[string]int) ([]RawTransa
 	}
 
 	dtifName := getCol("DTIF NAME")
-	units := getCol("DTIF UNITS")
-	costBasis := getCol("COST BASIS")
-	salesPrice := getCol("SALES PRICE")
+	units := cleanRobinhoodDecimal(getCol("DTIF UNITS"))
+	costBasis := cleanRobinhoodDecimal(getCol("COST BASIS"))
+	salesPrice := cleanRobinhoodDecimal(getCol("SALES PRICE"))
 	saleDate := getCol("SALE DATE")
 	acquiredDate := getCol("DATE ACQUIRED")
 	term := getCol("TERM")
@@ -123,47 +127,59 @@ func (r *Robinhood) parseDARow(row []string, colIdx map[string]int) ([]RawTransa
 	// Resolve crypto symbol from DTIF NAME
 	symbol := resolveCryptoSymbol(dtifName)
 	if symbol == "" {
-		return nil, false
+		return nil, false, nil
 	}
 
 	// Skip rows with no units
 	if units == "" || units == "0" {
-		return nil, false
+		return nil, false, nil
 	}
 
 	var txs []RawTransaction
 
 	// Create a synthetic buy (acquisition) if we have a cost basis
 	if acquiredDate != "" && costBasis != "" && costBasis != "0" {
+		acquiredTS, err := parseRobinhoodDate(acquiredDate)
+		if err != nil {
+			return nil, false, fmt.Errorf("invalid DATE ACQUIRED %q: %w", acquiredDate, err)
+		}
 		txs = append(txs, RawTransaction{
-			ID:       fmt.Sprintf("rh-buy-%s-%s-%s", acquiredDate, symbol, units),
-			Source:   types.SourceRobinhood,
-			Chain:    types.ChainRobinhood,
-			Asset:    symbol,
-			Amount:   units,
-			USDPrice: costBasis, // total cost basis (not per-unit)
-			RawType:  "1099-DA-BUY",
+			ID:        fmt.Sprintf("rh-buy-%s-%s-%s", acquiredDate, symbol, units),
+			Timestamp: acquiredTS,
+			Source:    types.SourceRobinhood,
+			Chain:     types.ChainRobinhood,
+			Wallet:    "robinhood",
+			Asset:     symbol,
+			Amount:    units,
+			USDPrice:  costBasis, // total lot cost basis from Robinhood, not per-unit
+			RawType:   "1099-DA-BUY",
 		})
 	}
 
 	// Create a sell (disposition) if we have a sale date and proceeds
 	if saleDate != "" && salesPrice != "" {
+		saleTS, err := parseRobinhoodDate(saleDate)
+		if err != nil {
+			return nil, false, fmt.Errorf("invalid SALE DATE %q: %w", saleDate, err)
+		}
 		rawType := "1099-DA-SELL"
 		if term != "" {
 			rawType = fmt.Sprintf("1099-DA-SELL-%s", term)
 		}
 		txs = append(txs, RawTransaction{
-			ID:       fmt.Sprintf("rh-sell-%s-%s-%s", saleDate, symbol, units),
-			Source:   types.SourceRobinhood,
-			Chain:    types.ChainRobinhood,
-			Asset:    symbol,
-			Amount:   units,
-			USDPrice: salesPrice, // total proceeds (not per-unit)
-			RawType:  rawType,
+			ID:        fmt.Sprintf("rh-sell-%s-%s-%s", saleDate, symbol, units),
+			Timestamp: saleTS,
+			Source:    types.SourceRobinhood,
+			Chain:     types.ChainRobinhood,
+			Wallet:    "robinhood",
+			Asset:     symbol,
+			Amount:    units,
+			USDPrice:  salesPrice, // total sale proceeds from Robinhood, not per-unit
+			RawType:   rawType,
 		})
 	}
 
-	return txs, len(txs) > 0
+	return txs, len(txs) > 0, nil
 }
 
 // resolveCryptoSymbol extracts a crypto ticker from a DTIF name.
@@ -195,4 +211,35 @@ func resolveCryptoSymbol(dtifName string) string {
 	}
 
 	return ""
+}
+
+func parseRobinhoodDate(value string) (int64, error) {
+	value = strings.TrimSpace(value)
+	layouts := []string{
+		"01/02/2006",
+		"1/2/2006",
+		"2006-01-02",
+	}
+
+	for _, layout := range layouts {
+		parsed, err := time.ParseInLocation(layout, value, time.UTC)
+		if err == nil {
+			return parsed.Unix(), nil
+		}
+	}
+
+	return 0, fmt.Errorf("unsupported date format")
+}
+
+func cleanRobinhoodDecimal(value string) string {
+	value = strings.TrimSpace(value)
+	negative := strings.HasPrefix(value, "(") && strings.HasSuffix(value, ")")
+	value = strings.TrimPrefix(value, "(")
+	value = strings.TrimSuffix(value, ")")
+	value = strings.TrimPrefix(value, "$")
+	value = strings.ReplaceAll(value, ",", "")
+	if negative && value != "" {
+		return "-" + value
+	}
+	return value
 }

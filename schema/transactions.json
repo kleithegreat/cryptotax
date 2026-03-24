@@ -14,7 +14,7 @@
     },
     "wallets": {
       "type": "array",
-      "description": "All wallet addresses owned by the user. Used by Haskell to identify transfers between own wallets (non-taxable) vs. sends to others (taxable disposals).",
+      "description": "All wallet identifiers owned by the user. The Go layer uses this set to conservatively classify own-wallet transfers before the Haskell core consumes the normalized stream.",
       "items": { "type": "string" },
       "minItems": 1
     },
@@ -64,7 +64,7 @@
         },
         "wallet": {
           "type": "string",
-          "description": "The user's wallet address involved in this transaction."
+          "description": "The specific user wallet or account that this normalized row belongs to."
         },
         "counterparty": {
           "type": ["string", "null"],

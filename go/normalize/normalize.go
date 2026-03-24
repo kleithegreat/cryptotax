@@ -50,6 +50,10 @@ func normalizeOne(
 	wallets map[string]bool,
 	pp *price.Provider,
 ) (types.Transaction, error) {
+	if raw.Wallet == "" {
+		return types.Transaction{}, fmt.Errorf("missing wallet on raw transaction")
+	}
+
 	ts := time.Unix(raw.Timestamp, 0).UTC()
 
 	tx := types.Transaction{
@@ -57,7 +61,7 @@ func normalizeOne(
 		Timestamp: ts,
 		Source:    raw.Source,
 		Chain:     raw.Chain,
-		Wallet:    raw.FromAddr,
+		Wallet:    raw.Wallet,
 	}
 
 	if raw.RawType != "" {
@@ -70,7 +74,7 @@ func normalizeOne(
 		tx = normalizeRobinhood(tx, raw)
 
 	case raw.Source == types.SourceHyperliquid:
-		tx = normalizeHyperliquid(tx, raw)
+		tx = normalizeHyperliquid(tx, raw, pp)
 
 	case raw.Source == types.SourceHelius:
 		tx = normalizeHelius(tx, raw, wallets, pp)
@@ -84,8 +88,6 @@ func normalizeOne(
 }
 
 func normalizeRobinhood(tx types.Transaction, raw fetcher.RawTransaction) types.Transaction {
-	tx.Wallet = "robinhood"
-
 	switch {
 	case strings.Contains(raw.RawType, "BUY"):
 		tx.TxType = types.TxBuy
@@ -115,9 +117,15 @@ func normalizeRobinhood(tx types.Transaction, raw fetcher.RawTransaction) types.
 	return tx
 }
 
-func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction) types.Transaction {
+func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction, pp *price.Provider) types.Transaction {
 	if raw.RawType == "funding" {
 		tx.TxType = types.TxFundingPayment
+		if isNegativeDecimal(raw.Amount) {
+			// TODO: Negative funding is an expense, but the current IR/core only
+			// models funding receipts directly. Leave it unmaterialized instead
+			// of silently turning it into taxable income.
+			return tx
+		}
 		tx.Received = &types.AssetAmount{
 			Asset:    "USDC",
 			Amount:   raw.Amount,
@@ -130,6 +138,8 @@ func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction) type
 
 	switch strings.ToUpper(raw.RawType) {
 	case "OPEN LONG", "OPEN SHORT":
+		// TODO: Hyperliquid perpetual positions are not spot acquisitions.
+		// This remains a best-effort proxy until the IR can model perp lots/PnL.
 		tx.TxType = types.TxBuy
 		tx.Received = &types.AssetAmount{
 			Asset:    strings.ToUpper(raw.Asset),
@@ -137,6 +147,8 @@ func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction) type
 			USDValue: usdValue,
 		}
 	case "CLOSE LONG", "CLOSE SHORT":
+		// TODO: Hyperliquid perpetual closes should reconcile against position
+		// state, not a spot inventory queue. Keep the approximation explicit.
 		tx.TxType = types.TxSell
 		tx.Sent = &types.AssetAmount{
 			Asset:    strings.ToUpper(raw.Asset),
@@ -159,10 +171,15 @@ func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction) type
 	}
 
 	if raw.Fee != "" {
+		feeAsset := strings.ToUpper(raw.FeeAsset)
+		feeUSD := raw.Fee
+		if feeAsset != "" && feeAsset != "USDC" {
+			feeUSD = resolveUSDPrice(feeAsset, raw.Fee, raw.Timestamp, pp)
+		}
 		tx.Fee = &types.AssetAmount{
-			Asset:    raw.FeeAsset,
+			Asset:    feeAsset,
 			Amount:   raw.Fee,
-			USDValue: raw.Fee, // fees are in USDC
+			USDValue: feeUSD,
 		}
 	}
 
@@ -205,36 +222,42 @@ func normalizeHelius(
 		return tx
 	}
 
-	// Simple transfer
-	fromIsOwn := wallets[strings.ToLower(raw.FromAddr)]
-	toIsOwn := wallets[strings.ToLower(raw.ToAddr)]
-
 	usdValue := resolveUSDPrice(raw.Asset, raw.Amount, raw.Timestamp, pp)
+	movement := classifyAddressMovement(raw, wallets)
 
-	switch {
-	case fromIsOwn && toIsOwn:
+	switch movement.txType {
+	case types.TxTransferOut:
 		tx.TxType = types.TxTransferOut
 		tx.Sent = &types.AssetAmount{
 			Asset: strings.ToUpper(raw.Asset), Amount: raw.Amount, USDValue: usdValue,
 		}
-	case fromIsOwn:
+	case types.TxSell:
 		tx.TxType = types.TxSell
 		tx.Sent = &types.AssetAmount{
 			Asset: strings.ToUpper(raw.Asset), Amount: raw.Amount, USDValue: usdValue,
 		}
-		cp := raw.ToAddr
-		tx.Counterparty = &cp
-	case toIsOwn:
-		// TODO: default to transfer_in rather than income to avoid overstating
-		// taxable income. User can reclassify if it was actually income.
+	case types.TxTransferIn:
+		// TODO: Distinguishing income from ordinary inbound transfers on Solana
+		// needs richer instruction-level modeling than Helius' summary rows.
 		tx.TxType = types.TxTransferIn
 		tx.Received = &types.AssetAmount{
 			Asset: strings.ToUpper(raw.Asset), Amount: raw.Amount, USDValue: usdValue,
 		}
-		cp := raw.FromAddr
-		tx.Counterparty = &cp
 	default:
-		tx.TxType = types.TxTransferIn
+		tx.TxType = movement.txType
+	}
+
+	if movement.counterparty != nil {
+		tx.Counterparty = movement.counterparty
+	}
+
+	if raw.Fee != "" && movement.attachFee {
+		feeUSD := resolveUSDPrice("SOL", raw.Fee, raw.Timestamp, pp)
+		tx.Fee = &types.AssetAmount{
+			Asset:    "SOL",
+			Amount:   raw.Fee,
+			USDValue: feeUSD,
+		}
 	}
 
 	return tx
@@ -246,9 +269,6 @@ func normalizeEVM(
 	wallets map[string]bool,
 	pp *price.Provider,
 ) types.Transaction {
-	fromIsOwn := wallets[strings.ToLower(raw.FromAddr)]
-	toIsOwn := wallets[strings.ToLower(raw.ToAddr)]
-
 	// Amounts are already in human-readable decimal from the fetcher
 	amount := raw.Amount
 
@@ -257,37 +277,37 @@ func normalizeEVM(
 		usdValue = resolveUSDPrice(raw.Asset, amount, raw.Timestamp, pp)
 	}
 
-	switch {
-	case fromIsOwn && toIsOwn:
+	movement := classifyAddressMovement(raw, wallets)
+
+	switch movement.txType {
+	case types.TxTransferOut:
 		tx.TxType = types.TxTransferOut
 		tx.Sent = &types.AssetAmount{
 			Asset: strings.ToUpper(raw.Asset), Amount: amount, USDValue: usdValue,
 		}
-
-	case fromIsOwn && !toIsOwn:
+	case types.TxSell:
 		tx.TxType = types.TxSell
 		tx.Sent = &types.AssetAmount{
 			Asset: strings.ToUpper(raw.Asset), Amount: amount, USDValue: usdValue,
 		}
-		counterparty := raw.ToAddr
-		tx.Counterparty = &counterparty
-
-	case !fromIsOwn && toIsOwn:
-		// Default to transfer_in, not income — many incoming txs are contract
-		// interactions or DEX returns, not taxable income. User can reclassify.
+	case types.TxTransferIn:
+		// Default to transfer_in, not income — many inbound EVM rows are
+		// transfer returns or contract outputs, not clear taxable income.
+		// TODO: Reconstruct multi-leg EVM swaps/bridges per tx hash instead of
+		// classifying isolated token movements one row at a time.
 		tx.TxType = types.TxTransferIn
 		tx.Received = &types.AssetAmount{
 			Asset: strings.ToUpper(raw.Asset), Amount: amount, USDValue: usdValue,
 		}
-		counterparty := raw.FromAddr
-		tx.Counterparty = &counterparty
-
 	default:
-		tx.TxType = types.TxTransferIn
+		tx.TxType = movement.txType
 	}
 
-	// Gas fee (already in decimal from fetcher)
-	if fromIsOwn && raw.Fee != "" {
+	if movement.counterparty != nil {
+		tx.Counterparty = movement.counterparty
+	}
+
+	if raw.Fee != "" && movement.attachFee {
 		feeUSD := resolveUSDPrice("ETH", raw.Fee, raw.Timestamp, pp)
 		tx.Fee = &types.AssetAmount{
 			Asset:    "ETH",
@@ -320,4 +340,78 @@ func multiplyStrings(a, b string) string {
 	}
 	result := new(big.Rat).Mul(ra, rb)
 	return result.FloatString(8)
+}
+
+type addressMovement struct {
+	txType       types.TxType
+	counterparty *string
+	attachFee    bool
+}
+
+func classifyAddressMovement(raw fetcher.RawTransaction, wallets map[string]bool) addressMovement {
+	wallet := strings.ToLower(raw.Wallet)
+	from := strings.ToLower(raw.FromAddr)
+	to := strings.ToLower(raw.ToAddr)
+
+	walletIsSender := wallet != "" && from == wallet
+	walletIsReceiver := wallet != "" && to == wallet
+	fromIsOwn := wallets[from]
+	toIsOwn := wallets[to]
+
+	switch {
+	case walletIsSender && toIsOwn:
+		return addressMovement{
+			txType:       types.TxTransferOut,
+			counterparty: stringPtr(raw.ToAddr),
+			attachFee:    true,
+		}
+	case walletIsSender:
+		return addressMovement{
+			txType:       types.TxSell,
+			counterparty: stringPtr(raw.ToAddr),
+			attachFee:    true,
+		}
+	case walletIsReceiver && fromIsOwn:
+		return addressMovement{
+			txType:       types.TxTransferIn,
+			counterparty: stringPtr(raw.FromAddr),
+		}
+	case walletIsReceiver:
+		return addressMovement{
+			txType:       types.TxTransferIn,
+			counterparty: stringPtr(raw.FromAddr),
+		}
+	case fromIsOwn && toIsOwn:
+		return addressMovement{
+			txType:       types.TxTransferOut,
+			counterparty: stringPtr(raw.ToAddr),
+			attachFee:    true,
+		}
+	case fromIsOwn:
+		return addressMovement{
+			txType:       types.TxSell,
+			counterparty: stringPtr(raw.ToAddr),
+			attachFee:    true,
+		}
+	case toIsOwn:
+		return addressMovement{
+			txType:       types.TxTransferIn,
+			counterparty: stringPtr(raw.FromAddr),
+		}
+	default:
+		return addressMovement{txType: types.TxTransferIn}
+	}
+}
+
+func stringPtr(value string) *string {
+	if value == "" {
+		return nil
+	}
+	ptr := value
+	return &ptr
+}
+
+func isNegativeDecimal(value string) bool {
+	r, ok := new(big.Rat).SetString(value)
+	return ok && r.Sign() < 0
 }

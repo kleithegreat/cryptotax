@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 
@@ -71,7 +72,7 @@ func (h *Hyperliquid) Fetch(wallet string) ([]RawTransaction, error) {
 	// Resolve spot @N coin mappings
 	spotMap, err := h.fetchSpotMeta()
 	if err != nil {
-		fmt.Printf("Warning: could not fetch spot metadata: %v\n", err)
+		fmt.Fprintf(os.Stderr, "Warning: could not fetch spot metadata: %v\n", err)
 		spotMap = make(map[string]string)
 	}
 
@@ -102,6 +103,7 @@ func (h *Hyperliquid) Fetch(wallet string) ([]RawTransaction, error) {
 			Timestamp: fill.Time / 1000, // ms → seconds
 			Source:    types.SourceHyperliquid,
 			Chain:     types.ChainHyperliquid,
+			Wallet:    wallet,
 			Asset:     coin,
 			Amount:    fill.Sz,
 			USDPrice:  fill.Px,
@@ -117,6 +119,7 @@ func (h *Hyperliquid) Fetch(wallet string) ([]RawTransaction, error) {
 			Timestamp: f.Time / 1000,
 			Source:    types.SourceHyperliquid,
 			Chain:     types.ChainHyperliquid,
+			Wallet:    wallet,
 			Asset:     f.Delta.Coin,
 			Amount:    f.Delta.USDC,
 			RawType:   "funding",
