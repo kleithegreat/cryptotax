@@ -79,6 +79,15 @@
             exec ${lib.getExe cli} run --dry-run "$@"
           '';
         };
+
+        auditApp = pkgs.writeShellApplication {
+          name = "cryptotax-audit";
+          runtimeInputs = [ cli ];
+          text = ''
+            export CRYPTOTAX_AUDIT_RERUN_PREFIX='nix run .#audit --'
+            exec ${lib.getExe cli} audit "$@"
+          '';
+        };
       in {
         packages = {
           inherit cli core bundle;
@@ -112,6 +121,13 @@
             program = "${dryRunApp}/bin/cryptotax-dry-run";
             meta = commonMeta // {
               description = "Run the Go CLI in --dry-run mode";
+            };
+          };
+          audit = {
+            type = "app";
+            program = "${auditApp}/bin/cryptotax-audit";
+            meta = commonMeta // {
+              description = "Run the Go CLI audit subcommands";
             };
           };
           default = {

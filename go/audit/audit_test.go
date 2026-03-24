@@ -1,0 +1,194 @@
+package audit
+
+import (
+	"os"
+	"path/filepath"
+	"testing"
+	"time"
+
+	"github.com/kevin/cryptotax/types"
+)
+
+func TestFilterPayloadAppliesCombinedFilters(t *testing.T) {
+	t.Parallel()
+
+	payload := testPayload()
+	from := payload.Transactions[0].Timestamp.Add(-time.Minute)
+	to := payload.Transactions[0].Timestamp.Add(time.Minute)
+
+	filtered := FilterPayload(payload, Filters{
+		TxID:          "tx-1",
+		FromTimestamp: &from,
+		ToTimestamp:   &to,
+		Wallet:        "0xaaa",
+		Asset:         "eth",
+		RawType:       "native transfer",
+	})
+
+	if len(filtered.Transactions) != 1 {
+		t.Fatalf("expected 1 transaction after filtering, got %d", len(filtered.Transactions))
+	}
+
+	tx := filtered.Transactions[0]
+	if tx.ID != "tx-1" || tx.Wallet != "0xaaa" {
+		t.Fatalf("unexpected transaction after filtering: %#v", tx)
+	}
+
+	if len(filtered.Wallets) != len(payload.Wallets) {
+		t.Fatalf("expected wallets to be preserved, got %v", filtered.Wallets)
+	}
+}
+
+func TestFilterPayloadMatchesFeeAssetCaseInsensitive(t *testing.T) {
+	t.Parallel()
+
+	payload := testPayload()
+	filtered := FilterPayload(payload, Filters{Asset: "eth"})
+
+	if len(filtered.Transactions) != 2 {
+		t.Fatalf("expected 2 ETH transactions, got %d", len(filtered.Transactions))
+	}
+}
+
+func TestBuildSummaryAggregatesExactAssetTotals(t *testing.T) {
+	t.Parallel()
+
+	summary, err := BuildSummary(testPayload())
+	if err != nil {
+		t.Fatalf("BuildSummary returned error: %v", err)
+	}
+
+	if summary.TransactionCount != 3 {
+		t.Fatalf("expected 3 transactions, got %d", summary.TransactionCount)
+	}
+	if summary.UniqueIDCount != 2 {
+		t.Fatalf("expected 2 unique ids, got %d", summary.UniqueIDCount)
+	}
+	if summary.MissingRawTypeCount != 1 {
+		t.Fatalf("expected 1 missing raw_type, got %d", summary.MissingRawTypeCount)
+	}
+	if summary.TimestampRange == nil {
+		t.Fatalf("expected timestamp range")
+	}
+	if got := summary.ByTxType[types.TxTransferOut]; got != 1 {
+		t.Fatalf("expected 1 transfer_out, got %d", got)
+	}
+	if got := summary.ByWallet["0xbbb"]; got != 2 {
+		t.Fatalf("expected wallet 0xbbb count 2, got %d", got)
+	}
+	if got := summary.ByRawType["native transfer"]; got != 1 {
+		t.Fatalf("expected raw_type count 1, got %d", got)
+	}
+
+	eth := summary.ByAsset["ETH"]
+	if eth.TransactionCount != 2 {
+		t.Fatalf("expected ETH transaction count 2, got %d", eth.TransactionCount)
+	}
+	if eth.SentAmount != "1.25" {
+		t.Fatalf("expected ETH sent amount 1.25, got %q", eth.SentAmount)
+	}
+	if eth.ReceivedAmount != "0.75" {
+		t.Fatalf("expected ETH received amount 0.75, got %q", eth.ReceivedAmount)
+	}
+	if eth.FeeAmount != "0.01" {
+		t.Fatalf("expected ETH fee amount 0.01, got %q", eth.FeeAmount)
+	}
+
+	usdc := summary.ByAsset["USDC"]
+	if usdc.TransactionCount != 1 {
+		t.Fatalf("expected USDC transaction count 1, got %d", usdc.TransactionCount)
+	}
+	if usdc.ReceivedAmount != "25" {
+		t.Fatalf("expected USDC received amount 25, got %q", usdc.ReceivedAmount)
+	}
+}
+
+func TestWriteCaptureArtifactsWritesPayloadAndCommandFile(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	outputPath := filepath.Join(dir, "audit", "normalized.json")
+	payload := testPayload()
+	commandLine := "nix run .#audit -- capture audit/normalized.json --eth-wallet 0xaaa"
+
+	if err := WriteCaptureArtifacts(outputPath, payload, commandLine); err != nil {
+		t.Fatalf("WriteCaptureArtifacts returned error: %v", err)
+	}
+
+	writtenPayload, err := LoadPayload(outputPath)
+	if err != nil {
+		t.Fatalf("LoadPayload returned error: %v", err)
+	}
+	if len(writtenPayload.Transactions) != len(payload.Transactions) {
+		t.Fatalf("expected %d transactions, got %d", len(payload.Transactions), len(writtenPayload.Transactions))
+	}
+
+	commandBytes, err := os.ReadFile(outputPath + ".command")
+	if err != nil {
+		t.Fatalf("read command file: %v", err)
+	}
+
+	expectedCommand := "# Re-run command\n" + commandLine + "\n"
+	if string(commandBytes) != expectedCommand {
+		t.Fatalf("unexpected command file contents:\n%s", string(commandBytes))
+	}
+}
+
+func testPayload() types.TxPayload {
+	firstRawType := "native transfer"
+	secondRawType := "token transfer"
+	start := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
+
+	return types.TxPayload{
+		Version: "1.0.0",
+		Wallets: []string{"0xaaa", "0xbbb"},
+		Transactions: []types.Transaction{
+			{
+				ID:        "tx-1",
+				Timestamp: start,
+				Source:    types.SourceEtherscan,
+				Chain:     types.ChainEthereum,
+				TxType:    types.TxTransferOut,
+				Wallet:    "0xaaa",
+				Sent: &types.AssetAmount{
+					Asset:    "ETH",
+					Amount:   "1.25",
+					USDValue: "2500",
+				},
+				Fee: &types.AssetAmount{
+					Asset:    "ETH",
+					Amount:   "0.010",
+					USDValue: "20",
+				},
+				RawType: &firstRawType,
+			},
+			{
+				ID:        "tx-2",
+				Timestamp: start.Add(2 * time.Hour),
+				Source:    types.SourceHelius,
+				Chain:     types.ChainSolana,
+				TxType:    types.TxTransferIn,
+				Wallet:    "0xbbb",
+				Received: &types.AssetAmount{
+					Asset:    "eth",
+					Amount:   "0.75",
+					USDValue: "1500",
+				},
+			},
+			{
+				ID:        "tx-1",
+				Timestamp: start.Add(3 * time.Hour),
+				Source:    types.SourceEtherscan,
+				Chain:     types.ChainEthereum,
+				TxType:    types.TxTransferIn,
+				Wallet:    "0xbbb",
+				Received: &types.AssetAmount{
+					Asset:    "USDC",
+					Amount:   "25.00",
+					USDValue: "25.00",
+				},
+				RawType: &secondRawType,
+			},
+		},
+	}
+}

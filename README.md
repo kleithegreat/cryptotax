@@ -66,6 +66,17 @@ nix run .#dry-run -- \
   --hl-wallet ... \
   --robinhood-csv path/to/robinhood.csv
 
+# Capture normalized JSON for audit review and record the re-run command
+nix run .#audit -- capture audit/normalized.json \
+  --eth-wallet 0x... \
+  --sol-wallet ... \
+  --hl-wallet ... \
+  --robinhood-csv path/to/robinhood.csv
+
+# Filter or summarize a captured audit snapshot
+nix run .#audit -- filter audit/normalized.json --wallet 0x... --asset ETH
+nix run .#audit -- summary audit/normalized.json --wallet 0x...
+
 # Run the full pipeline with the flake-wrapped core binary
 nix run .#run -- \
   --eth-wallet 0x... \
@@ -81,6 +92,9 @@ nix flake check
 API keys can be passed explicitly with `--etherscan-key` / `--helius-key` or
 via `ETHERSCAN_API_KEY` / `HELIUS_API_KEY`. The CLI intentionally does not bake
 env-derived secrets into flag defaults, so `--help` output does not echo them.
+
+For reproducible manual review of normalized transactions, see
+`docs/audit-workflow.md`.
 
 ## Supported sources
 
@@ -116,6 +130,7 @@ env-derived secrets into flag defaults, so `--help` output does not echo them.
 - `packages.core`: Haskell financial core
 - `apps.run`: wrapper that runs the Go CLI with `--core` pointed at the flake-built Haskell binary
 - `apps.dry-run`: wrapper that runs the Go CLI with `--dry-run`
+- `apps.audit`: wrapper that runs `cryptotax audit ...`
 - `checks`: Go build, Haskell build, Haskell test suite
 - `devShell`: Go + Haskell development environment
 
@@ -124,10 +139,14 @@ env-derived secrets into flag defaults, so `--help` output does not echo them.
 ```
 cryptotax/
 ├── flake.nix                 # Flake packages, apps, checks, and dev shell
+├── docs/
+│   ├── audit-workflow.md     # Reproducible audit steps for normalized JSON
+│   └── known-transactions.md # Human-reviewed transaction comparison template
 ├── schema/
 │   └── transactions.json     # JSON Schema (Go→Haskell contract)
 ├── go/
 │   ├── cmd/main.go           # CLI entrypoint (cobra)
+│   ├── audit/                # Audit payload capture, filtering, and summaries
 │   ├── fetcher/              # Chain-specific data fetchers
 │   ├── price/                # CoinGecko USD price lookups
 │   ├── normalize/            # Raw → unified transaction schema
