@@ -25,7 +25,13 @@ After changing Go, Haskell, flake, or transaction-classification logic, run:
 nix build .#cli
 nix build .#core
 nix flake check
-````
+```
+
+If Go-only unit tests are relevant, run them from the nested module correctly, for example:
+
+```bash
+nix develop -c bash -lc 'cd go && go test ./...'
+```
 
 If you change only docs, say so explicitly and skip build steps only if they are genuinely unnecessary.
 
@@ -64,6 +70,11 @@ When changing transaction semantics:
 * If behavior is approximate, say so in code comments and in your summary.
 * Unsupported or partially modeled cases should be surfaced, not hidden.
 
+When dealing with real transactions:
+- Codex may summarize and prepare evidence.
+- Codex must not claim a transaction is verified unless the evidence is present in repo docs or explicitly supplied by the user.
+- Leave placeholders for human confirmation when needed.
+
 High-risk areas:
 
 * EVM swaps and multi-leg contract interactions
@@ -82,6 +93,12 @@ High-risk areas:
   * filter by tx id / wallet / asset / raw_type / timestamp range
   * reconciliation summaries
 * Audit tools should emit stable, machine-readable output.
+
+When triaging production data:
+- prioritize `zero_usd_value_rows`
+- prioritize `suspicious_asset_rows`
+- prioritize unusual `tx_type` or `source` buckets
+- propose candidate verified cases, but do not fabricate conclusions
 
 ## Test expectations
 
@@ -118,5 +135,7 @@ At the end of your work, report:
 1. what changed
 2. why it changed
 3. how you validated it
-4. any remaining TODOs / limitations
-5. exact commands the user should run next
+4. what was observed in the audit output
+5. which cases still require human verification
+6. any remaining TODOs / limitations
+7. exact commands the user should run next
