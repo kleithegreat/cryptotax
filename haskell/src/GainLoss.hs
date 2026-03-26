@@ -99,40 +99,46 @@ handleSwap st tx = case (txSent tx, txReceived tx) of
 handleIncome :: AccState -> Transaction -> AccState
 handleIncome st tx = case txReceived tx of
   Nothing -> st { stErrors = "Income without received asset" : stErrors st }
-  Just rcv ->
-    let amt   = TokenAmount (parseDecimal (aaAmount rcv))
-        fmv   = USD (parseDecimal (aaUSDValue rcv))
-        queue = Lot.acquire (AssetSymbol (aaAsset rcv)) (txTimestamp tx) amt fmv (stQueue st)
-        entry = GainLoss
-          { glAsset     = AssetSymbol (aaAsset rcv)
-          , glAcquired  = txTimestamp tx
-          , glDisposed  = txTimestamp tx
-          , glAmount    = amt
-          , glCostBasis = 0
-          , glProceeds  = fmv
-          , glGain      = fmv
-          , glPeriod    = ShortTerm
-          }
-    in st { stQueue = queue, stIncome = entry : stIncome st }
+  Just rcv -> recordIncomeReceipt st tx rcv
 
 handleFunding :: AccState -> Transaction -> AccState
-handleFunding st tx = case txReceived tx of
-  Nothing -> st  -- negative funding = expense, skip for now
-  Just rcv ->
-    let fmv   = USD (parseDecimal (aaUSDValue rcv))
-        entry = GainLoss
-          { glAsset     = AssetSymbol (aaAsset rcv)
-          , glAcquired  = txTimestamp tx
-          , glDisposed  = txTimestamp tx
-          , glAmount    = TokenAmount (parseDecimal (aaAmount rcv))
-          , glCostBasis = 0
-          , glProceeds  = fmv
-          , glGain      = fmv
-          , glPeriod    = ShortTerm
-          }
-    in st { stIncome = entry : stIncome st }
+handleFunding st tx = case (txSent tx, txReceived tx) of
+  (Nothing, Just rcv) -> recordIncomeReceipt st tx rcv
+  (Just snt, Nothing) ->
+    st
+      { stErrors =
+          ("Unsupported negative funding_payment expense for tx "
+            <> txId tx
+            <> ": sent "
+            <> aaAmount snt
+            <> " "
+            <> aaAsset snt
+            <> "; ordinary expense output and inventory adjustment are not implemented yet")
+            : stErrors st
+      }
+  (Nothing, Nothing) ->
+    st { stErrors = "Funding payment without sent or received asset" : stErrors st }
+  (Just _, Just _) ->
+    st { stErrors = "Funding payment with both sent and received assets" : stErrors st }
 
 feeUSD :: Transaction -> USD
 feeUSD tx = case txFee tx of
   Nothing  -> 0
   Just fee -> USD (parseDecimal (aaUSDValue fee))
+
+recordIncomeReceipt :: AccState -> Transaction -> AssetAmount -> AccState
+recordIncomeReceipt st tx rcv =
+  let amt   = TokenAmount (parseDecimal (aaAmount rcv))
+      fmv   = USD (parseDecimal (aaUSDValue rcv))
+      queue = Lot.acquire (AssetSymbol (aaAsset rcv)) (txTimestamp tx) amt fmv (stQueue st)
+      entry = GainLoss
+        { glAsset     = AssetSymbol (aaAsset rcv)
+        , glAcquired  = txTimestamp tx
+        , glDisposed  = txTimestamp tx
+        , glAmount    = amt
+        , glCostBasis = 0
+        , glProceeds  = fmv
+        , glGain      = fmv
+        , glPeriod    = ShortTerm
+        }
+  in st { stQueue = queue, stIncome = entry : stIncome st }

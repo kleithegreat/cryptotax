@@ -121,9 +121,15 @@ func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction, pp *
 	if raw.RawType == "funding" {
 		tx.TxType = types.TxFundingPayment
 		if isNegativeDecimal(raw.Amount) {
-			// TODO: Negative funding is an expense, but the current IR/core only
-			// models funding receipts directly. Leave it unmaterialized instead
-			// of silently turning it into taxable income.
+			// Funding paid is an ordinary expense, not a spot trade or fee.
+			// Preserve it as an explicit outbound funding leg so the core can
+			// surface the unsupported expense instead of dropping it silently.
+			amount := absDecimalString(raw.Amount)
+			tx.Sent = &types.AssetAmount{
+				Asset:    "USDC",
+				Amount:   amount,
+				USDValue: amount, // USDC ≈ 1 USD
+			}
 			return tx
 		}
 		tx.Received = &types.AssetAmount{
@@ -414,4 +420,11 @@ func stringPtr(value string) *string {
 func isNegativeDecimal(value string) bool {
 	r, ok := new(big.Rat).SetString(value)
 	return ok && r.Sign() < 0
+}
+
+func absDecimalString(value string) string {
+	if strings.HasPrefix(value, "-") {
+		return strings.TrimPrefix(value, "-")
+	}
+	return value
 }

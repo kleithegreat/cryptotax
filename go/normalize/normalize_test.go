@@ -2,6 +2,7 @@ package normalize
 
 import (
 	"testing"
+	"time"
 
 	"github.com/kevin/cryptotax/fetcher"
 	"github.com/kevin/cryptotax/types"
@@ -65,5 +66,65 @@ func TestNormalizeUsesExplicitWalletForOwnTransfer(t *testing.T) {
 	}
 	if txs[1].Fee != nil {
 		t.Fatalf("expected receiver row to omit duplicated fee")
+	}
+}
+
+func TestNormalizeHyperliquidFundingPositiveAsReceivedUSDC(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "funding-positive",
+		Timestamp: time.Date(2025, 12, 2, 0, 0, 0, 0, time.UTC).Unix(),
+		Source:    types.SourceHyperliquid,
+		Chain:     types.ChainHyperliquid,
+		Wallet:    "0xwallet",
+		Amount:    "1.879512",
+		RawType:   "funding",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxFundingPayment {
+		t.Fatalf("expected tx_type %q, got %q", types.TxFundingPayment, tx.TxType)
+	}
+	if tx.Sent != nil {
+		t.Fatalf("expected positive funding not to populate sent leg, got %#v", tx.Sent)
+	}
+	if tx.Received == nil {
+		t.Fatal("expected positive funding to populate received leg")
+	}
+	if tx.Received.Asset != "USDC" || tx.Received.Amount != "1.879512" || tx.Received.USDValue != "1.879512" {
+		t.Fatalf("unexpected received leg: %#v", tx.Received)
+	}
+}
+
+func TestNormalizeHyperliquidFundingNegativeAsSentUSDC(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "funding-negative",
+		Timestamp: time.Date(2025, 10, 7, 0, 0, 0, 0, time.UTC).Unix(),
+		Source:    types.SourceHyperliquid,
+		Chain:     types.ChainHyperliquid,
+		Wallet:    "0xwallet",
+		Amount:    "-0.168095",
+		RawType:   "funding",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxFundingPayment {
+		t.Fatalf("expected tx_type %q, got %q", types.TxFundingPayment, tx.TxType)
+	}
+	if tx.Received != nil {
+		t.Fatalf("expected negative funding not to populate received leg, got %#v", tx.Received)
+	}
+	if tx.Sent == nil {
+		t.Fatal("expected negative funding to populate sent leg")
+	}
+	if tx.Sent.Asset != "USDC" || tx.Sent.Amount != "0.168095" || tx.Sent.USDValue != "0.168095" {
+		t.Fatalf("unexpected sent leg: %#v", tx.Sent)
 	}
 }

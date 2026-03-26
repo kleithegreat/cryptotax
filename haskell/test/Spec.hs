@@ -381,7 +381,51 @@ prop_zeroValueSafe = forAll genPositiveAmount $ \amt ->
          ]
 
 -- ---------------------------------------------------------------------------
--- 16. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
+-- 16. Positive funding creates ordinary income and a USDC lot
+-- ---------------------------------------------------------------------------
+
+prop_positiveFundingCreatesIncomeAndLot :: Property
+prop_positiveFundingCreatesIncomeAndLot = once $
+  let t = UTCTime (fromGregorian 2025 12 2) 0
+      tx = Transaction
+        { txId = "funding-positive", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Nothing
+        , txReceived = Just (AssetAmount "USDC" "1.879512" "1.879512")
+        , txFee = Nothing, txRawType = Just "funding"
+        }
+      result = processTransactions [tx]
+  in conjoin
+       [ property (null (prErrors result))
+       , property (length (prIncome result) == 1)
+       , Lot.totalUnits "USDC" (prFinalQueue result) === TokenAmount (469878 % 250000)
+       , Lot.totalCostBasis (prFinalQueue result) === USD (469878 % 250000)
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 17. Negative funding is preserved but surfaced as unsupported
+-- ---------------------------------------------------------------------------
+
+prop_negativeFundingIsExplicitlyUnsupported :: Property
+prop_negativeFundingIsExplicitlyUnsupported = once $
+  let t = UTCTime (fromGregorian 2025 10 7) 0
+      tx = Transaction
+        { txId = "funding-negative", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Just (AssetAmount "USDC" "0.168095" "0.168095")
+        , txReceived = Nothing
+        , txFee = Nothing, txRawType = Just "funding"
+        }
+      result = processTransactions [tx]
+  in conjoin
+       [ property (null (prIncome result))
+       , Lot.totalUnits "USDC" (prFinalQueue result) === 0
+       , prErrors result ===
+           [ "Unsupported negative funding_payment expense for tx funding-negative: sent 0.168095 USDC; ordinary expense output and inventory adjustment are not implemented yet" ]
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 18. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
 -- ---------------------------------------------------------------------------
 
 golden_basicBuySellTransfer :: IO ()
@@ -443,8 +487,10 @@ main = do
   check "13. multi-lot disposal"         prop_multiLotDisposal
   check "14. dust precision"             prop_dustPrecision
   check "15. zero-value safety"          prop_zeroValueSafe
+  check "16. positive funding income"    prop_positiveFundingCreatesIncomeAndLot
+  check "17. negative funding explicit"  prop_negativeFundingIsExplicitlyUnsupported
 
-  putStr "  16. golden buy/sell/transfer: "
+  putStr "  18. golden buy/sell/transfer: "
   golden_basicBuySellTransfer
   putStrLn "OK"
 

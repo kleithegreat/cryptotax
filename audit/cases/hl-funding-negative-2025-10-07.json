@@ -16,7 +16,11 @@
       "tx_type": "funding_payment",
       "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
       "counterparty": null,
-      "sent": null,
+      "sent": {
+        "asset": "USDC",
+        "amount": "0.168095",
+        "usd_value": "0.168095"
+      },
       "received": null,
       "fee": null,
       "raw_type": "funding"

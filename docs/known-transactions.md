@@ -180,10 +180,10 @@ below for new evidence.
 - Filtered normalized case: [hl-funding-negative-2025-10-07.json](/home/kevin/repos/cryptotax/audit/cases/hl-funding-negative-2025-10-07.json)
 - Regression fixture input: [hl-funding-negative-2025-10-07.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hl-funding-negative-2025-10-07.input.json)
 - Current-normalization fixture: [hyperliquid-funding.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hyperliquid-funding.expected.json)
-- Regression coverage: `documented current normalization only; negative-funding semantics still pending`
+- Regression coverage: `documented normalization plus focused Go/Haskell funding tests; negative-funding final tax-output semantics still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca --raw-type funding --from-timestamp 2025-10-07T00:00:00Z --to-timestamp 2025-10-07T23:59:59Z`
-- Current normalized JSON: `1 row; funding_payment with no sent, received, or fee legs`
-- Human verification required: `TODO confirm this was a negative funding expense and decide how it should be represented once the IR can model non-income funding outflows`
+- Current normalized JSON: `1 row; funding_payment sent USDC 0.168095 @ 0.168095 USD`
+- Human verification required: `TODO retain and review the Hyperliquid source row showing delta.usdc -0.168095 for 2025-10-07T00:00:00Z, then decide how this ordinary expense should appear in final tax output`
 
 #### 13. Hyperliquid positive funding row
 
@@ -193,10 +193,10 @@ below for new evidence.
 - Filtered normalized case: [hl-funding-positive-2025-12-02.json](/home/kevin/repos/cryptotax/audit/cases/hl-funding-positive-2025-12-02.json)
 - Regression fixture input: [hl-funding-positive-2025-12-02.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hl-funding-positive-2025-12-02.input.json)
 - Current-normalization fixture: [hyperliquid-funding.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hyperliquid-funding.expected.json)
-- Regression coverage: `documented current normalization only; funding evidence linkage still pending`
+- Regression coverage: `documented normalization plus focused Go/Haskell funding tests; funding evidence linkage still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca --raw-type funding --from-timestamp 2025-12-02T00:00:00Z --to-timestamp 2025-12-02T23:59:59Z`
 - Current normalized JSON: `1 row; funding_payment received USDC 1.879512 @ 1.879512 USD`
-- Human verification required: `TODO confirm the funding amount, confirm whether the all-zero tx id is acceptable evidence linkage, and decide whether funding rows need a richer identifier`
+- Human verification required: `TODO retain and review the Hyperliquid source row showing delta.usdc 1.879512 for 2025-12-02T00:00:00Z, confirm whether the all-zero tx id is acceptable evidence linkage, and decide whether funding rows need a richer identifier`
 
 #### 14. Hyperliquid perpetual open-long approximation
 
