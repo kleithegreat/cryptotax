@@ -133,6 +133,9 @@ func TestBuildSummaryAggregatesExactAssetTotals(t *testing.T) {
 	if !slices.Equal(suspiciousRow.Assets, []string{"eth"}) {
 		t.Fatalf("unexpected suspicious assets: %v", suspiciousRow.Assets)
 	}
+	if !slices.Equal(suspiciousRow.Fields, []string{"received"}) {
+		t.Fatalf("unexpected suspicious asset fields: %v", suspiciousRow.Fields)
+	}
 	if !slices.Equal(suspiciousRow.Reasons, []string{"non_canonical_asset_case"}) {
 		t.Fatalf("unexpected suspicious asset reasons: %v", suspiciousRow.Reasons)
 	}
@@ -182,9 +185,63 @@ func TestBuildSummaryFlagsAddressLikeAndPlaceholderAssets(t *testing.T) {
 	}) {
 		t.Fatalf("unexpected suspicious assets: %v", row.Assets)
 	}
+	if !slices.Equal(row.Fields, []string{
+		"sent",
+		"received",
+	}) {
+		t.Fatalf("unexpected suspicious asset fields: %v", row.Fields)
+	}
 	if !slices.Equal(row.Reasons, []string{
 		"address_like_asset_symbol",
 		"placeholder_asset_symbol",
+	}) {
+		t.Fatalf("unexpected suspicious asset reasons: %v", row.Reasons)
+	}
+}
+
+func TestBuildSummaryFlagsUnresolvedValuationForSuspiciousSolanaSwapLeg(t *testing.T) {
+	t.Parallel()
+
+	payload, err := LoadPayload(filepath.Join("testdata", "real-wallet", "sol-pumpfun-zero-usd.input.json"))
+	if err != nil {
+		t.Fatalf("LoadPayload returned error: %v", err)
+	}
+
+	summary, err := BuildSummary(payload)
+	if err != nil {
+		t.Fatalf("BuildSummary returned error: %v", err)
+	}
+
+	if len(summary.ZeroUSDValueRows) != 1 {
+		t.Fatalf("expected 1 zero usd_value row, got %d", len(summary.ZeroUSDValueRows))
+	}
+	zeroRow := summary.ZeroUSDValueRows[0]
+	if zeroRow.ID != "PbxPFcX7JQF6PuTMjRs2xKuC2azpAmnc1uALwYxCKuwnWFT3vb156p17CZRYjcU1ySB1ANHSWgGfPEfHtE2QXKm" {
+		t.Fatalf("unexpected zero usd_value row id: %q", zeroRow.ID)
+	}
+	if !slices.Equal(zeroRow.Fields, []string{"received"}) {
+		t.Fatalf("unexpected zero usd_value fields: %v", zeroRow.Fields)
+	}
+	if !slices.Equal(zeroRow.Assets, []string{"CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP"}) {
+		t.Fatalf("unexpected zero usd_value assets: %v", zeroRow.Assets)
+	}
+
+	if len(summary.SuspiciousAssetRows) != 1 {
+		t.Fatalf("expected 1 suspicious asset row, got %d", len(summary.SuspiciousAssetRows))
+	}
+	row := summary.SuspiciousAssetRows[0]
+	if row.ID != zeroRow.ID {
+		t.Fatalf("expected suspicious asset row id %q, got %q", zeroRow.ID, row.ID)
+	}
+	if !slices.Equal(row.Assets, zeroRow.Assets) {
+		t.Fatalf("unexpected suspicious assets: %v", row.Assets)
+	}
+	if !slices.Equal(row.Fields, []string{"received"}) {
+		t.Fatalf("unexpected suspicious asset fields: %v", row.Fields)
+	}
+	if !slices.Equal(row.Reasons, []string{
+		"address_like_asset_symbol",
+		"unresolved_asset_valuation",
 	}) {
 		t.Fatalf("unexpected suspicious asset reasons: %v", row.Reasons)
 	}

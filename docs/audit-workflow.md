@@ -97,7 +97,9 @@ Notes:
   leg has a normalized USD value of exactly zero.
 - `suspicious_asset_rows` is heuristic. It flags blank, placeholder,
   address-like, or non-canonical-case asset symbols so they get reviewed before
-  tax output is trusted.
+  tax output is trusted. When the suspicious leg also has `0` normalized USD,
+  the row includes `unresolved_asset_valuation`, and `fields` points to the
+  affected leg(s).
 - The summary is meant for reconciliation and review support; it does not add
   tax semantics beyond the normalized payload.
 

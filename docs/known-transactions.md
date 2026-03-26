@@ -145,7 +145,7 @@ below for new evidence.
 - Filtered normalized case: [sol-pumpfun-zero-usd.json](/home/kevin/repos/cryptotax/audit/cases/sol-pumpfun-zero-usd.json)
 - Regression fixture input: [sol-pumpfun-zero-usd.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/sol-pumpfun-zero-usd.input.json)
 - Current-normalization fixture: [solana-pumpfun-zero-usd.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/solana-pumpfun-zero-usd.expected.json)
-- Regression coverage: `documented current normalization only; asset identity and valuation still pending`
+- Regression coverage: `documented current normalization plus audit-summary regression for the unresolved received-leg identity/valuation; asset identity and valuation still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id PbxPFcX7JQF6PuTMjRs2xKuC2azpAmnc1uALwYxCKuwnWFT3vb156p17CZRYjcU1ySB1ANHSWgGfPEfHtE2QXKm --wallet BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp`
 - Current normalized JSON: `1 row; swap sent SOL 0.000803279 @ 0.12734483 USD, received CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP 540724.686218000 @ 0 USD, fee SOL 0.001005000 @ 0.15932391 USD`
 - Human verification required: `TODO confirm the received mint symbol/name, confirm whether the swap path is correct, and decide whether zero USD is acceptable or whether a valuation source is required`

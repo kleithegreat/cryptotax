@@ -210,7 +210,10 @@ func BuildSummary(payload types.TxPayload) (Summary, error) {
 			summary.ZeroUSDValueRows = append(summary.ZeroUSDValueRows, *zeroUSDValueRow)
 		}
 
-		suspiciousAssetRow := buildSuspiciousAssetRow(tx)
+		suspiciousAssetRow, err := buildSuspiciousAssetRow(tx)
+		if err != nil {
+			return Summary{}, fmt.Errorf("transaction %d suspicious_asset: %w", index, err)
+		}
 		if suspiciousAssetRow != nil {
 			summary.SuspiciousAssetRows = append(summary.SuspiciousAssetRows, *suspiciousAssetRow)
 		}
@@ -476,8 +479,9 @@ func buildZeroUSDValueRow(tx types.Transaction) (*FlaggedRow, error) {
 	}, nil
 }
 
-func buildSuspiciousAssetRow(tx types.Transaction) *FlaggedRow {
+func buildSuspiciousAssetRow(tx types.Transaction) (*FlaggedRow, error) {
 	var assets []string
+	var fields []string
 	reasonSet := make(map[string]struct{})
 
 	for _, component := range transactionAssetComponents(tx) {
@@ -491,13 +495,23 @@ func buildSuspiciousAssetRow(tx types.Transaction) *FlaggedRow {
 		}
 
 		assets = appendUniqueString(assets, displayAsset(component.amount.Asset))
+		fields = appendUniqueString(fields, component.field)
 		for _, reason := range reasons {
 			reasonSet[reason] = struct{}{}
+		}
+		if assetIdentityNeedsManualReview(reasons) {
+			isZero, err := isZeroDecimal(component.amount.USDValue)
+			if err != nil {
+				return nil, err
+			}
+			if isZero {
+				reasonSet["unresolved_asset_valuation"] = struct{}{}
+			}
 		}
 	}
 
 	if len(assets) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	reasons := make([]string, 0, len(reasonSet))
@@ -514,8 +528,19 @@ func buildSuspiciousAssetRow(tx types.Transaction) *FlaggedRow {
 		TxType:    tx.TxType,
 		Wallet:    tx.Wallet,
 		Assets:    assets,
+		Fields:    fields,
 		Reasons:   reasons,
+	}, nil
+}
+
+func assetIdentityNeedsManualReview(reasons []string) bool {
+	for _, reason := range reasons {
+		switch reason {
+		case "blank_asset_symbol", "placeholder_asset_symbol", "address_like_asset_symbol":
+			return true
+		}
 	}
+	return false
 }
 
 func isZeroDecimal(value string) (bool, error) {
@@ -534,7 +559,7 @@ func suspiciousAssetReasons(asset string) []string {
 
 	var reasons []string
 	upper := strings.ToUpper(trimmed)
-	addressLike := looksLikeHexAddress(trimmed) || looksLikeBase58Mint(trimmed)
+	addressLike := looksLikeHexAddress(trimmed) || looksLikeMintLikeAsset(trimmed)
 
 	if upper == "UNKNOWN" || upper == "UNK" || upper == "?" {
 		reasons = append(reasons, "placeholder_asset_symbol")
@@ -576,6 +601,32 @@ func looksLikeBase58Mint(asset string) bool {
 		}
 	}
 	return true
+}
+
+func looksLikeMintLikeAsset(asset string) bool {
+	if looksLikeBase58Mint(asset) {
+		return true
+	}
+	if len(asset) < 32 || len(asset) > 44 {
+		return false
+	}
+
+	// Some Solana asset identifiers are still clearly mint-like long strings even
+	// when they do not pass strict base58 validation (for example, uppercase I).
+	hasLetter := false
+	hasDigit := false
+	for _, r := range asset {
+		switch {
+		case unicode.IsLetter(r):
+			hasLetter = true
+		case unicode.IsDigit(r):
+			hasDigit = true
+		default:
+			return false
+		}
+	}
+
+	return hasLetter && hasDigit
 }
 
 func displayAsset(asset string) string {
