@@ -28,8 +28,12 @@ below for new evidence.
 
 - Snapshot: `audit/normalized.json` generated locally from the recorded command and not committed by default because it contains the full real-wallet snapshot
 - Summary: [summary.json](/home/kevin/repos/cryptotax/audit/summary.json)
+- Regression fixtures for documented current normalization only: [go/audit/testdata/real-wallet](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet)
 - Reviewer: `<fill in>`
 - Default status for all cases below: `pending`
+- `Verified Cases` above are the only cases in this file with explicit evidence-backed validation.
+- The regression fixtures under `go/audit/testdata/real-wallet` freeze current observed normalized output from the local snapshot only.
+- The `Human verification required` lines below remain the source of truth for what still needs human confirmation before any tax or semantic claim is treated as verified.
 
 ### Ethereum / Arbitrum
 
@@ -69,6 +73,9 @@ below for new evidence.
 - Source system: `Etherscan / Ethereum`
 - Source reference: `TODO: confirm tx 0xabe5b9a79e83186d6dc419b32ca316bcca0b6aee123e2f50243db115a94f7ecf on explorer and identify the bridge/protocol`
 - Filtered normalized case: [eth-bridge-out-usdc.json](/home/kevin/repos/cryptotax/audit/cases/eth-bridge-out-usdc.json)
+- Regression fixture input: [eth-bridge-out-usdc.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/eth-bridge-out-usdc.input.json)
+- Current-normalization fixture: [evm-bridge-usdc-fillrelay.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/evm-bridge-usdc-fillrelay.expected.json)
+- Regression coverage: `documented current normalization only; semantic/tax verification still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id 0xabe5b9a79e83186d6dc419b32ca316bcca0b6aee123e2f50243db115a94f7ecf --wallet 0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA`
 - Current normalized JSON: `2 rows under one tx id; sell USDC 499.000000 @ 499.00000000 USD plus a zero-amount ETH sell row, both with ETH fee 0.000276150331013650 @ 1.07408644 USD`
 - Human verification required: `TODO confirm this was an own-wallet bridge rather than a taxable sale, and verify whether the zero-amount ETH leg is purely an artifact of token transfer parsing`
@@ -79,6 +86,9 @@ below for new evidence.
 - Source system: `Etherscan / Arbitrum`
 - Source reference: `TODO: confirm tx 0x9e2b76f517772cfcbbf29c5426b3513fc1b872898263c2a46dfadebea4c15c7a on explorer and pair it with the correct outbound bridge transaction`
 - Filtered normalized case: [arb-bridge-in-fillrelay.json](/home/kevin/repos/cryptotax/audit/cases/arb-bridge-in-fillrelay.json)
+- Regression fixture input: [arb-bridge-in-fillrelay.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/arb-bridge-in-fillrelay.input.json)
+- Current-normalization fixture: [evm-bridge-usdc-fillrelay.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/evm-bridge-usdc-fillrelay.expected.json)
+- Regression coverage: `documented current normalization only; bridge matching still requires human confirmation`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id 0x9e2b76f517772cfcbbf29c5426b3513fc1b872898263c2a46dfadebea4c15c7a --wallet 0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA`
 - Current normalized JSON: `1 row; transfer_in USDC 494.577367 @ 494.57736700 USD with raw_type fillRelay(...)`
 - Human verification required: `TODO confirm this is the bridge completion for an own-wallet transfer and not third-party proceeds or another taxable inflow`
@@ -133,6 +143,9 @@ below for new evidence.
 - Source system: `Helius enhanced transactions / Solana explorer`
 - Source reference: `TODO: confirm tx PbxPFcX7JQF6PuTMjRs2xKuC2azpAmnc1uALwYxCKuwnWFT3vb156p17CZRYjcU1ySB1ANHSWgGfPEfHtE2QXKm and identify the received mint`
 - Filtered normalized case: [sol-pumpfun-zero-usd.json](/home/kevin/repos/cryptotax/audit/cases/sol-pumpfun-zero-usd.json)
+- Regression fixture input: [sol-pumpfun-zero-usd.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/sol-pumpfun-zero-usd.input.json)
+- Current-normalization fixture: [solana-pumpfun-zero-usd.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/solana-pumpfun-zero-usd.expected.json)
+- Regression coverage: `documented current normalization only; asset identity and valuation still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id PbxPFcX7JQF6PuTMjRs2xKuC2azpAmnc1uALwYxCKuwnWFT3vb156p17CZRYjcU1ySB1ANHSWgGfPEfHtE2QXKm --wallet BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp`
 - Current normalized JSON: `1 row; swap sent SOL 0.000803279 @ 0.12734483 USD, received CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP 540724.686218000 @ 0 USD, fee SOL 0.001005000 @ 0.15932391 USD`
 - Human verification required: `TODO confirm the received mint symbol/name, confirm whether the swap path is correct, and decide whether zero USD is acceptable or whether a valuation source is required`
@@ -165,6 +178,9 @@ below for new evidence.
 - Source system: `Hyperliquid funding history`
 - Source reference: `TODO: confirm the funding event for 2025-10-07T00:00:00Z from Hyperliquid source data`
 - Filtered normalized case: [hl-funding-negative-2025-10-07.json](/home/kevin/repos/cryptotax/audit/cases/hl-funding-negative-2025-10-07.json)
+- Regression fixture input: [hl-funding-negative-2025-10-07.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hl-funding-negative-2025-10-07.input.json)
+- Current-normalization fixture: [hyperliquid-funding.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hyperliquid-funding.expected.json)
+- Regression coverage: `documented current normalization only; negative-funding semantics still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca --raw-type funding --from-timestamp 2025-10-07T00:00:00Z --to-timestamp 2025-10-07T23:59:59Z`
 - Current normalized JSON: `1 row; funding_payment with no sent, received, or fee legs`
 - Human verification required: `TODO confirm this was a negative funding expense and decide how it should be represented once the IR can model non-income funding outflows`
@@ -175,6 +191,9 @@ below for new evidence.
 - Source system: `Hyperliquid funding history`
 - Source reference: `TODO: confirm the funding event for 2025-12-02T00:00:00Z from Hyperliquid source data`
 - Filtered normalized case: [hl-funding-positive-2025-12-02.json](/home/kevin/repos/cryptotax/audit/cases/hl-funding-positive-2025-12-02.json)
+- Regression fixture input: [hl-funding-positive-2025-12-02.input.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hl-funding-positive-2025-12-02.input.json)
+- Current-normalization fixture: [hyperliquid-funding.expected.json](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet/hyperliquid-funding.expected.json)
+- Regression coverage: `documented current normalization only; funding evidence linkage still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca --raw-type funding --from-timestamp 2025-12-02T00:00:00Z --to-timestamp 2025-12-02T23:59:59Z`
 - Current normalized JSON: `1 row; funding_payment received USDC 1.879512 @ 1.879512 USD`
 - Human verification required: `TODO confirm the funding amount, confirm whether the all-zero tx id is acceptable evidence linkage, and decide whether funding rows need a richer identifier`

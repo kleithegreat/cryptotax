@@ -1,0 +1,55 @@
+{
+  "label": "hyperliquid-funding",
+  "category": "hyperliquid_funding_pair",
+  "status": "documented_current_normalization",
+  "current_behavior_summary": "Current normalization keeps positive funding as an inbound USDC funding_payment row and negative funding as a funding_payment row with no sent, received, or fee legs.",
+  "group_human_confirmation_placeholder": "TODO confirm both funding events against Hyperliquid source data and decide how negative funding outflows should be represented once the IR can model them.",
+  "cases": [
+    {
+      "label": "hl-funding-negative-2025-10-07",
+      "input_file": "hl-funding-negative-2025-10-07.input.json",
+      "documented_current_behavior": "1 row; funding_payment with no sent, received, or fee legs",
+      "human_confirmation_placeholder": "TODO confirm this was a negative funding expense and decide how it should be represented once the IR can model non-income funding outflows",
+      "current_normalized_transactions": [
+        {
+          "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": "2025-10-07T00:00:00Z",
+          "source": "hyperliquid",
+          "chain": "hyperliquid",
+          "tx_type": "funding_payment",
+          "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
+          "counterparty": null,
+          "sent": null,
+          "received": null,
+          "fee": null,
+          "raw_type": "funding"
+        }
+      ]
+    },
+    {
+      "label": "hl-funding-positive-2025-12-02",
+      "input_file": "hl-funding-positive-2025-12-02.input.json",
+      "documented_current_behavior": "1 row; funding_payment received USDC 1.879512 @ 1.879512 USD",
+      "human_confirmation_placeholder": "TODO confirm the funding amount, confirm whether the all-zero tx id is acceptable evidence linkage, and decide whether funding rows need a richer identifier",
+      "current_normalized_transactions": [
+        {
+          "id": "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "timestamp": "2025-12-02T00:00:00Z",
+          "source": "hyperliquid",
+          "chain": "hyperliquid",
+          "tx_type": "funding_payment",
+          "wallet": "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca",
+          "counterparty": null,
+          "sent": null,
+          "received": {
+            "asset": "USDC",
+            "amount": "1.879512",
+            "usd_value": "1.879512"
+          },
+          "fee": null,
+          "raw_type": "funding"
+        }
+      ]
+    }
+  ]
+}

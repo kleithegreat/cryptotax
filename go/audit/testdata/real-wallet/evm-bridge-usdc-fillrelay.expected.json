@@ -1,0 +1,84 @@
+{
+  "label": "evm-bridge-usdc-fillrelay",
+  "category": "evm_bridge_pair",
+  "status": "documented_current_normalization",
+  "current_behavior_summary": "Current normalization keeps the Ethereum bridge candidate as two sell rows and the Arbitrum fillRelay candidate as one transfer_in row.",
+  "group_human_confirmation_placeholder": "TODO confirm whether these tx ids are the same own-wallet bridge transfer and whether bridge-specific semantics should replace the current sell-plus-transfer representation.",
+  "cases": [
+    {
+      "label": "eth-bridge-out-usdc",
+      "input_file": "eth-bridge-out-usdc.input.json",
+      "documented_current_behavior": "2 rows under one tx id; sell USDC 499.000000 @ 499.00000000 USD plus a zero-amount ETH sell row, both with ETH fee 0.000276150331013650 @ 1.07408644 USD",
+      "human_confirmation_placeholder": "TODO confirm this was an own-wallet bridge rather than a taxable sale, and verify whether the zero-amount ETH leg is purely an artifact of token transfer parsing",
+      "current_normalized_transactions": [
+        {
+          "id": "0xabe5b9a79e83186d6dc419b32ca316bcca0b6aee123e2f50243db115a94f7ecf",
+          "timestamp": "2025-10-19T02:38:59Z",
+          "source": "etherscan",
+          "chain": "ethereum",
+          "tx_type": "sell",
+          "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+          "counterparty": "0x9a47f3289794e9bbc6a3c571f6d96ad4e7baed16",
+          "sent": {
+            "asset": "USDC",
+            "amount": "499.000000",
+            "usd_value": "499.00000000"
+          },
+          "received": null,
+          "fee": {
+            "asset": "ETH",
+            "amount": "0.000276150331013650",
+            "usd_value": "1.07408644"
+          },
+          "raw_type": "bridge(string adapterId,address srcToken,uint256 amount,bytes data)"
+        },
+        {
+          "id": "0xabe5b9a79e83186d6dc419b32ca316bcca0b6aee123e2f50243db115a94f7ecf",
+          "timestamp": "2025-10-19T02:38:59Z",
+          "source": "etherscan",
+          "chain": "ethereum",
+          "tx_type": "sell",
+          "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+          "counterparty": "0x0439e60f02a8900a951603950d8d4527f400c3f1",
+          "sent": {
+            "asset": "ETH",
+            "amount": "0.000000000000000000",
+            "usd_value": "0.00000000"
+          },
+          "received": null,
+          "fee": {
+            "asset": "ETH",
+            "amount": "0.000276150331013650",
+            "usd_value": "1.07408644"
+          },
+          "raw_type": "bridge(string adapterId,address srcToken,uint256 amount,bytes data)"
+        }
+      ]
+    },
+    {
+      "label": "arb-bridge-in-fillrelay",
+      "input_file": "arb-bridge-in-fillrelay.input.json",
+      "documented_current_behavior": "1 row; transfer_in USDC 494.577367 @ 494.57736700 USD with raw_type fillRelay(...)",
+      "human_confirmation_placeholder": "TODO confirm this is the bridge completion for an own-wallet transfer and not third-party proceeds or another taxable inflow",
+      "current_normalized_transactions": [
+        {
+          "id": "0x9e2b76f517772cfcbbf29c5426b3513fc1b872898263c2a46dfadebea4c15c7a",
+          "timestamp": "2025-10-19T02:39:05Z",
+          "source": "etherscan",
+          "chain": "arbitrum",
+          "tx_type": "transfer_in",
+          "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+          "counterparty": "0x07ae8551be970cb1cca11dd7a11f47ae82e70e67",
+          "sent": null,
+          "received": {
+            "asset": "USDC",
+            "amount": "494.577367",
+            "usd_value": "494.57736700"
+          },
+          "fee": null,
+          "raw_type": "fillRelay(tuple relayData,uint256 repaymentChainId,bytes32 repaymentAddress)"
+        }
+      ]
+    }
+  ]
+}

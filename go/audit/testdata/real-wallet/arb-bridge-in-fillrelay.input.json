@@ -1,0 +1,29 @@
+{
+  "version": "1.0.0",
+  "wallets": [
+    "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+    "0x29c5ee30daA4c6ceFA193c4ed9d821db36D9452e",
+    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+    "pEpumqQXSRCx5XgJ7P9NpdbZ1qBP934KGByMsjQm8UM",
+    "robinhood"
+  ],
+  "transactions": [
+    {
+      "id": "0x9e2b76f517772cfcbbf29c5426b3513fc1b872898263c2a46dfadebea4c15c7a",
+      "timestamp": "2025-10-19T02:39:05Z",
+      "source": "etherscan",
+      "chain": "arbitrum",
+      "tx_type": "transfer_in",
+      "wallet": "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA",
+      "counterparty": "0x07ae8551be970cb1cca11dd7a11f47ae82e70e67",
+      "sent": null,
+      "received": {
+        "asset": "USDC",
+        "amount": "494.577367",
+        "usd_value": "494.57736700"
+      },
+      "fee": null,
+      "raw_type": "fillRelay(tuple relayData,uint256 repaymentChainId,bytes32 repaymentAddress)"
+    }
+  ]
+}
