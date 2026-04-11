@@ -13,7 +13,7 @@ The repository now has the beginnings of a domain-doc hierarchy, but the existin
 Needed:
 
 - replace the root `AGENTS.md` with the new agent-first version
-- add `ARCHITECTURE.md`, `REVIEW.md`, and `QUIRKS.md` to the highest-risk domains
+- continue filling in `REVIEW.md` and `QUIRKS.md` only where concrete domain tension or operational gotchas justify them
 - migrate overlapping content from older monolithic docs into domain docs intentionally
 
 ### 2. Support tiers are not yet documented consistently across domains
@@ -38,16 +38,16 @@ Needed:
 - gradually split domain-specific evidence and review items into the relevant domain docs
 - keep `known-transactions.md` as a compatibility layer until the new structure is mature enough to replace it intentionally
 
-### 4. Implementation is ahead of formalized contracts
+### 4. Review and quirks layers are still incomplete
 
 Status: open
 
-The repository has meaningful tests and conservative checkpoints already, but several important long-term contracts still need their own domain specs.
+The repository now has repo-wide and domain `SPEC.md` and `ARCHITECTURE.md` coverage for the highest-risk domains, but the follow-on review layer is still thin.
 
 Highest priority:
 
-- normalized IR contract
-- Haskell core semantics
+- normalized IR identity gaps
+- Haskell core unsupported-row surfacing
 - Solana identity and multi-leg handling
-- Hyperliquid support boundary
+- Hyperliquid funding evidence retention and perp support boundary
 - EVM bridge and swap support boundary
