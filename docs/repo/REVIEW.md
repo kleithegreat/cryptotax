@@ -38,16 +38,14 @@ Needed:
 - gradually split domain-specific evidence and review items into the relevant domain docs
 - keep `known-transactions.md` as a compatibility layer until the new structure is mature enough to replace it intentionally
 
-### 4. Review and quirks layers are still incomplete
+### 4. First domain review docs exist, but review and quirks layering is still incomplete
 
 Status: open
 
-The repository now has repo-wide and domain `SPEC.md` and `ARCHITECTURE.md` coverage for the highest-risk domains, but the follow-on review layer is still thin.
+The repository now has grounded `REVIEW.md` coverage for `docs/ir`, `docs/core`, `docs/solana`, and `docs/hyperliquid`. `docs/evm/REVIEW.md` is still intentionally absent because `docs/evm/SPEC.md` and `docs/evm/ARCHITECTURE.md` currently describe the same deliberately narrow conservative boundary rather than a separate spec-versus-implementation divergence.
 
-Highest priority:
+Needed:
 
-- normalized IR identity gaps
-- Haskell core unsupported-row surfacing
-- Solana identity and multi-leg handling
-- Hyperliquid funding evidence retention and perp support boundary
-- EVM bridge and swap support boundary
+- keep the new domain review docs current as code and support claims change
+- add `docs/evm/REVIEW.md` only once a real EVM spec-versus-implementation gap is grounded
+- continue filling `QUIRKS.md` only where concrete source-specific gotchas justify it
