@@ -202,16 +202,16 @@ func normalizeHelius(
 	if raw.Asset2 != "" {
 		tx.TxType = types.TxSwap
 
-		sentUSD := resolveUSDPrice(raw.Asset, raw.Amount, raw.Timestamp, pp)
-		rcvUSD := resolveUSDPrice(raw.Asset2, raw.Amount2, raw.Timestamp, pp)
+		sentUSD := resolveUSDPrice(heliusPriceLookupAsset(raw.Asset, raw.AssetSymbol), raw.Amount, raw.Timestamp, pp)
+		rcvUSD := resolveUSDPrice(heliusPriceLookupAsset(raw.Asset2, raw.Asset2Symbol), raw.Amount2, raw.Timestamp, pp)
 
 		tx.Sent = &types.AssetAmount{
-			Asset:    strings.ToUpper(raw.Asset),
+			Asset:    heliusDisplayAsset(raw.Asset, raw.AssetSymbol),
 			Amount:   raw.Amount,
 			USDValue: sentUSD,
 		}
 		tx.Received = &types.AssetAmount{
-			Asset:    strings.ToUpper(raw.Asset2),
+			Asset:    heliusDisplayAsset(raw.Asset2, raw.Asset2Symbol),
 			Amount:   raw.Amount2,
 			USDValue: rcvUSD,
 		}
@@ -228,26 +228,27 @@ func normalizeHelius(
 		return tx
 	}
 
-	usdValue := resolveUSDPrice(raw.Asset, raw.Amount, raw.Timestamp, pp)
+	usdValue := resolveUSDPrice(heliusPriceLookupAsset(raw.Asset, raw.AssetSymbol), raw.Amount, raw.Timestamp, pp)
+	displayAsset := heliusDisplayAsset(raw.Asset, raw.AssetSymbol)
 	movement := classifyAddressMovement(raw, wallets)
 
 	switch movement.txType {
 	case types.TxTransferOut:
 		tx.TxType = types.TxTransferOut
 		tx.Sent = &types.AssetAmount{
-			Asset: strings.ToUpper(raw.Asset), Amount: raw.Amount, USDValue: usdValue,
+			Asset: displayAsset, Amount: raw.Amount, USDValue: usdValue,
 		}
 	case types.TxSell:
 		tx.TxType = types.TxSell
 		tx.Sent = &types.AssetAmount{
-			Asset: strings.ToUpper(raw.Asset), Amount: raw.Amount, USDValue: usdValue,
+			Asset: displayAsset, Amount: raw.Amount, USDValue: usdValue,
 		}
 	case types.TxTransferIn:
 		// TODO: Distinguishing income from ordinary inbound transfers on Solana
 		// needs richer instruction-level modeling than Helius' summary rows.
 		tx.TxType = types.TxTransferIn
 		tx.Received = &types.AssetAmount{
-			Asset: strings.ToUpper(raw.Asset), Amount: raw.Amount, USDValue: usdValue,
+			Asset: displayAsset, Amount: raw.Amount, USDValue: usdValue,
 		}
 	default:
 		tx.TxType = movement.txType
@@ -335,6 +336,27 @@ func resolveUSDPrice(asset, amount string, unixTS int64, pp *price.Provider) str
 		return "0"
 	}
 	return multiplyStrings(amount, p)
+}
+
+func heliusDisplayAsset(assetID, symbol string) string {
+	symbol = strings.TrimSpace(symbol)
+	if symbol != "" {
+		return strings.ToUpper(symbol)
+	}
+
+	// Helius token transfers currently document mint addresses, not canonical
+	// ticker symbols. Preserve the exact source identifier when no separate
+	// source-backed symbol is available instead of uppercasing it into a symbol-
+	// like string.
+	return strings.TrimSpace(assetID)
+}
+
+func heliusPriceLookupAsset(assetID, symbol string) string {
+	symbol = strings.TrimSpace(symbol)
+	if symbol != "" {
+		return symbol
+	}
+	return strings.TrimSpace(assetID)
 }
 
 // multiplyStrings multiplies two decimal strings using exact arithmetic.

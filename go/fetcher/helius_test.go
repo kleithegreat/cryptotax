@@ -106,3 +106,76 @@ func TestHeliusParseEnhancedFallsBackToLegacyEndpoint(t *testing.T) {
 		t.Fatalf("expected fallback transaction, got %#v", txs)
 	}
 }
+
+func TestConvertHeliusSwapPreservesMintAndSourceSymbolSeparately(t *testing.T) {
+	t.Parallel()
+
+	mint := "CMMNJETQSDR79XaLkttgQjaQwuWqzuLifLJT8F7mpump"
+	txs := convertHeliusTx(heliusEnhancedTx{
+		Signature: "sig-symbol",
+		Type:      "SWAP",
+		Source:    "PUMP_FUN",
+		Fee:       5000,
+		Timestamp: 1700000000,
+		NativeTransfers: []heliusNativeTransfer{{
+			FromUserAccount: "wallet",
+			ToUserAccount:   "pool",
+			Amount:          803279,
+		}},
+		TokenTransfers: []heliusTokenTransfer{{
+			FromUserAccount: "pool",
+			ToUserAccount:   "wallet",
+			Mint:            mint,
+			Symbol:          " pump ",
+			TokenAmount:     540724.686218,
+		}},
+	}, "wallet")
+
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 transaction, got %d", len(txs))
+	}
+
+	tx := txs[0]
+	if tx.Asset != "SOL" || tx.AssetSymbol != "" {
+		t.Fatalf("expected native sent leg to stay SOL without separate symbol, got asset=%q symbol=%q", tx.Asset, tx.AssetSymbol)
+	}
+	if tx.Asset2 != mint {
+		t.Fatalf("expected received mint %q, got %q", mint, tx.Asset2)
+	}
+	if tx.Asset2Symbol != "pump" {
+		t.Fatalf("expected trimmed source symbol %q, got %q", "pump", tx.Asset2Symbol)
+	}
+	if tx.RawType != "SWAP/PUMP_FUN" {
+		t.Fatalf("expected raw type to preserve source, got %q", tx.RawType)
+	}
+}
+
+func TestConvertHeliusTransferDoesNotInventDisplaySymbol(t *testing.T) {
+	t.Parallel()
+
+	mint := "So11111111111111111111111111111111111111112"
+	txs := convertHeliusTx(heliusEnhancedTx{
+		Signature: "sig-transfer",
+		Type:      "TRANSFER",
+		Fee:       5000,
+		Timestamp: 1700000000,
+		TokenTransfers: []heliusTokenTransfer{{
+			FromUserAccount: "sender",
+			ToUserAccount:   "wallet",
+			Mint:            mint,
+			TokenAmount:     1.25,
+		}},
+	}, "wallet")
+
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 transaction, got %d", len(txs))
+	}
+
+	tx := txs[0]
+	if tx.Asset != mint {
+		t.Fatalf("expected asset mint %q, got %q", mint, tx.Asset)
+	}
+	if tx.AssetSymbol != "" {
+		t.Fatalf("expected blank display symbol when source omits it, got %q", tx.AssetSymbol)
+	}
+}

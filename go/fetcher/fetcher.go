@@ -28,13 +28,18 @@ type RawTransaction struct {
 	FromAddr string
 	ToAddr   string
 	Asset    string
-	Amount   string // exact decimal string
-	Fee      string // exact decimal string
-	FeeAsset string
+	// AssetSymbol is an optional source-backed display symbol for Asset.
+	// For Helius token rows, Asset may be the mint while AssetSymbol remains
+	// blank unless the source explicitly provides a separate symbol.
+	AssetSymbol string
+	Amount      string // exact decimal string
+	Fee         string // exact decimal string
+	FeeAsset    string
 
 	// For swaps: the other side of the trade.
-	Asset2  string
-	Amount2 string
+	Asset2       string
+	Asset2Symbol string
+	Amount2      string
 
 	// Source-provided USD price, if available (Robinhood, Hyperliquid).
 	USDPrice string

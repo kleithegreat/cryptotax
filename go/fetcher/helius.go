@@ -136,11 +136,15 @@ type heliusEnhancedTx struct {
 }
 
 type heliusTokenTransfer struct {
-	FromUserAccount string  `json:"fromUserAccount"`
-	ToUserAccount   string  `json:"toUserAccount"`
-	Mint            string  `json:"mint"`
-	TokenAmount     float64 `json:"tokenAmount"`
-	TokenStandard   string  `json:"tokenStandard"`
+	FromUserAccount string `json:"fromUserAccount"`
+	ToUserAccount   string `json:"toUserAccount"`
+	Mint            string `json:"mint"`
+	// Helius' structured transfer docs verify mint, amount, and accounts. If a
+	// separate source-backed symbol is present in the payload, preserve it, but
+	// do not depend on it for classification.
+	Symbol        string  `json:"symbol"`
+	TokenAmount   float64 `json:"tokenAmount"`
+	TokenStandard string  `json:"tokenStandard"`
 }
 
 type heliusNativeTransfer struct {
@@ -198,16 +202,18 @@ func convertHeliusTx(etx heliusEnhancedTx, wallet string) []RawTransaction {
 }
 
 func convertSwap(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []RawTransaction {
-	var sentAsset, rcvAsset string
+	var sentAsset, sentSymbol, rcvAsset, rcvSymbol string
 	var sentAmt, rcvAmt string
 
 	for _, tt := range etx.TokenTransfers {
 		if strings.ToLower(tt.FromUserAccount) == walletLower {
 			sentAsset = tt.Mint
+			sentSymbol = heliusTransferSymbol(tt)
 			sentAmt = formatTokenAmount(tt.TokenAmount)
 		}
 		if strings.ToLower(tt.ToUserAccount) == walletLower {
 			rcvAsset = tt.Mint
+			rcvSymbol = heliusTransferSymbol(tt)
 			rcvAmt = formatTokenAmount(tt.TokenAmount)
 		}
 	}
@@ -227,18 +233,20 @@ func convertSwap(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []Raw
 	}
 
 	return []RawTransaction{{
-		ID:        etx.Signature,
-		Timestamp: etx.Timestamp,
-		Source:    types.SourceHelius,
-		Chain:     types.ChainSolana,
-		Wallet:    wallet,
-		Asset:     sentAsset,
-		Amount:    sentAmt,
-		Asset2:    rcvAsset,
-		Amount2:   rcvAmt,
-		Fee:       feeSOL,
-		FeeAsset:  "SOL",
-		RawType:   fmt.Sprintf("SWAP/%s", etx.Source),
+		ID:           etx.Signature,
+		Timestamp:    etx.Timestamp,
+		Source:       types.SourceHelius,
+		Chain:        types.ChainSolana,
+		Wallet:       wallet,
+		Asset:        sentAsset,
+		AssetSymbol:  sentSymbol,
+		Amount:       sentAmt,
+		Asset2:       rcvAsset,
+		Asset2Symbol: rcvSymbol,
+		Amount2:      rcvAmt,
+		Fee:          feeSOL,
+		FeeAsset:     "SOL",
+		RawType:      fmt.Sprintf("SWAP/%s", etx.Source),
 	}}
 }
 
@@ -250,16 +258,17 @@ func convertTransfer(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) [
 			continue
 		}
 		raw := RawTransaction{
-			ID:        etx.Signature,
-			Timestamp: etx.Timestamp,
-			Source:    types.SourceHelius,
-			Chain:     types.ChainSolana,
-			Wallet:    wallet,
-			FromAddr:  tt.FromUserAccount,
-			ToAddr:    tt.ToUserAccount,
-			Asset:     tt.Mint,
-			Amount:    formatTokenAmount(tt.TokenAmount),
-			RawType:   "TRANSFER",
+			ID:          etx.Signature,
+			Timestamp:   etx.Timestamp,
+			Source:      types.SourceHelius,
+			Chain:       types.ChainSolana,
+			Wallet:      wallet,
+			FromAddr:    tt.FromUserAccount,
+			ToAddr:      tt.ToUserAccount,
+			Asset:       tt.Mint,
+			AssetSymbol: heliusTransferSymbol(tt),
+			Amount:      formatTokenAmount(tt.TokenAmount),
+			RawType:     "TRANSFER",
 		}
 		txs = append(txs, raw)
 	}
@@ -297,16 +306,17 @@ func convertGeneric(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []
 			continue
 		}
 		raw := RawTransaction{
-			ID:        etx.Signature,
-			Timestamp: etx.Timestamp,
-			Source:    types.SourceHelius,
-			Chain:     types.ChainSolana,
-			Wallet:    wallet,
-			FromAddr:  tt.FromUserAccount,
-			ToAddr:    tt.ToUserAccount,
-			Asset:     tt.Mint,
-			Amount:    formatTokenAmount(tt.TokenAmount),
-			RawType:   etx.Type,
+			ID:          etx.Signature,
+			Timestamp:   etx.Timestamp,
+			Source:      types.SourceHelius,
+			Chain:       types.ChainSolana,
+			Wallet:      wallet,
+			FromAddr:    tt.FromUserAccount,
+			ToAddr:      tt.ToUserAccount,
+			Asset:       tt.Mint,
+			AssetSymbol: heliusTransferSymbol(tt),
+			Amount:      formatTokenAmount(tt.TokenAmount),
+			RawType:     etx.Type,
 		}
 		txs = append(txs, raw)
 	}
@@ -368,6 +378,10 @@ func lamportsToSOL(lamports int64) string {
 
 func formatTokenAmount(amount float64) string {
 	return new(big.Float).SetFloat64(amount).Text('f', 9)
+}
+
+func heliusTransferSymbol(tt heliusTokenTransfer) string {
+	return strings.TrimSpace(tt.Symbol)
 }
 
 func walletTouchesTransfer(wallet, from, to string) bool {

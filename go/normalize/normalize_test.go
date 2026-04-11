@@ -5,6 +5,7 @@ import (
 	"time"
 
 	"github.com/kevin/cryptotax/fetcher"
+	"github.com/kevin/cryptotax/price"
 	"github.com/kevin/cryptotax/types"
 )
 
@@ -126,5 +127,110 @@ func TestNormalizeHyperliquidFundingNegativeAsSentUSDC(t *testing.T) {
 	}
 	if tx.Sent.Asset != "USDC" || tx.Sent.Amount != "0.168095" || tx.Sent.USDValue != "0.168095" {
 		t.Fatalf("unexpected sent leg: %#v", tx.Sent)
+	}
+}
+
+func TestNormalizeHeliusPreservesMintIdentityWithoutSourceSymbol(t *testing.T) {
+	t.Parallel()
+
+	mint := "So11111111111111111111111111111111111111112"
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "sol-transfer",
+		Timestamp: 1700000000,
+		Source:    types.SourceHelius,
+		Chain:     types.ChainSolana,
+		Wallet:    "wallet",
+		FromAddr:  "sender",
+		ToAddr:    "wallet",
+		Asset:     mint,
+		Amount:    "1.25",
+		RawType:   "TRANSFER",
+	}, map[string]bool{"wallet": true}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxTransferIn {
+		t.Fatalf("expected tx_type %q, got %q", types.TxTransferIn, tx.TxType)
+	}
+	if tx.Received == nil {
+		t.Fatal("expected received leg")
+	}
+	if tx.Received.Asset != mint {
+		t.Fatalf("expected exact mint identity %q, got %q", mint, tx.Received.Asset)
+	}
+	if tx.Received.USDValue != "0" {
+		t.Fatalf("expected unresolved mint usd_value 0, got %q", tx.Received.USDValue)
+	}
+}
+
+func TestNormalizeHeliusUsesSourceBackedSymbolForDisplayAndPricing(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:           "sol-swap-symbols",
+		Timestamp:    1700000000,
+		Source:       types.SourceHelius,
+		Chain:        types.ChainSolana,
+		Wallet:       "wallet",
+		Asset:        "mint-in",
+		AssetSymbol:  "usdc",
+		Amount:       "10.5",
+		Asset2:       "mint-out",
+		Asset2Symbol: "usdt",
+		Amount2:      "9.75",
+		RawType:      "SWAP/JUPITER",
+	}, map[string]bool{"wallet": true}, price.NewProvider())
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxSwap {
+		t.Fatalf("expected tx_type %q, got %q", types.TxSwap, tx.TxType)
+	}
+	if tx.Sent == nil || tx.Received == nil {
+		t.Fatalf("expected swap legs, got sent=%#v received=%#v", tx.Sent, tx.Received)
+	}
+	if tx.Sent.Asset != "USDC" || tx.Sent.USDValue != "10.50000000" {
+		t.Fatalf("unexpected sent leg: %#v", tx.Sent)
+	}
+	if tx.Received.Asset != "USDT" || tx.Received.USDValue != "9.75000000" {
+		t.Fatalf("unexpected received leg: %#v", tx.Received)
+	}
+}
+
+func TestNormalizeHeliusPumpfunMintRemainsConservativeWithoutSourceSymbol(t *testing.T) {
+	t.Parallel()
+
+	mint := "CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP"
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "PbxPFcX7JQF6PuTMjRs2xKuC2azpAmnc1uALwYxCKuwnWFT3vb156p17CZRYjcU1ySB1ANHSWgGfPEfHtE2QXKm",
+		Timestamp: time.Date(2025, 8, 3, 19, 22, 35, 0, time.UTC).Unix(),
+		Source:    types.SourceHelius,
+		Chain:     types.ChainSolana,
+		Wallet:    "BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp",
+		Asset:     "SOL",
+		Amount:    "0.000803279",
+		Asset2:    mint,
+		Amount2:   "540724.686218000",
+		Fee:       "0.001005000",
+		FeeAsset:  "SOL",
+		RawType:   "SWAP/PUMP_FUN",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxSwap {
+		t.Fatalf("expected tx_type %q, got %q", types.TxSwap, tx.TxType)
+	}
+	if tx.Received == nil {
+		t.Fatal("expected received leg")
+	}
+	if tx.Received.Asset != mint {
+		t.Fatalf("expected unresolved received mint %q, got %q", mint, tx.Received.Asset)
+	}
+	if tx.Received.USDValue != "0" {
+		t.Fatalf("expected unresolved received usd_value 0, got %q", tx.Received.USDValue)
 	}
 }
