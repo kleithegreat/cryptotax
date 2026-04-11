@@ -4,17 +4,17 @@ This document tracks repository-wide gaps, divergences, and follow-up work that 
 
 ## Open gaps
 
-### 1. Agent-first workflow is only partially bootstrapped
+### 1. Agent-first docs bootstrap still has follow-on cleanup
 
 Status: open
 
-The repository now has the beginnings of a domain-doc hierarchy, but the existing root `AGENTS.md` and older docs have not yet been fully reorganized around it.
+The repository now has an agent-first `AGENTS.md` plus repo-wide `SPEC.md`, `ARCHITECTURE.md`, `REVIEW.md`, and `QUIRKS.md` coverage. The follow-on cleanup is still open because older docs and evidence logs have not yet been fully reorganized around the new hierarchy.
 
 Needed:
 
-- replace the root `AGENTS.md` with the new agent-first version
 - continue filling in `REVIEW.md` and `QUIRKS.md` only where concrete domain tension or operational gotchas justify them
 - migrate overlapping content from older monolithic docs into domain docs intentionally
+- keep `docs/repo/TASK_DAG.md` current so blocked work, human gates, and cross-domain dependencies stay visible
 
 ### 2. Support tiers are not yet documented consistently across domains
 
