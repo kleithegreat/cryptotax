@@ -118,14 +118,14 @@ normalization rules:
 
 ## 5. Record the comparison
 
-Use [known-transactions.md](/home/kevin/repos/cryptotax/docs/known-transactions.md)
+Use [known-transactions.md](known-transactions.md)
 as the checklist template and evidence log. The verified-cases section shows
 the first local golden fixture; leave new expected values blank until a human
 verifies them from the source system.
 
 When the current normalized rows are documented well enough to freeze as a
 regression, copy the filtered payload into
-[go/audit/testdata/real-wallet](/home/kevin/repos/cryptotax/go/audit/testdata/real-wallet)
+[go/audit/testdata/real-wallet](../go/audit/testdata/real-wallet)
 and store a matching `*.expected.json` snapshot beside it. These files freeze
 current observed normalized output only; they are not source-verified evidence
 and they do not, by themselves, prove tax correctness. Keep unresolved

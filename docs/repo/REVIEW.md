@@ -18,13 +18,17 @@ Needed:
 
 ### 2. Support tiers are not yet documented consistently across domains
 
-Status: open
+Status: open (partial progress)
 
 The repository already distinguishes, in practice, between verified fixtures, current-behavior regression guards, and unresolved cases. That distinction now needs to be made explicit in each domain spec.
 
-Needed:
+Progress:
 
-- mark behaviors as supported, current-behavior-only, unsupported but surfaced, or human-verified exemplar
+- `docs/known-transactions.md` now has an explicit support-tier mapping that labels cases with regression fixtures as **current-behavior-only** and cases without as **unsupported but surfaced**, plus the verified golden fixture as **human-verified exemplar**
+
+Remaining:
+
+- mark behaviors in domain specs and architecture docs using the canonical tier labels
 - keep that labeling consistent between specs, review docs, fixtures, and summaries
 
 ### 3. Human verification evidence is still concentrated in one file
@@ -40,12 +44,16 @@ Needed:
 
 ### 4. First domain review docs exist, but review and quirks layering is still incomplete
 
-Status: open
+Status: open (partial progress)
 
 The repository now has grounded `REVIEW.md` coverage for `docs/ir`, `docs/core`, `docs/solana`, and `docs/hyperliquid`. `docs/evm/REVIEW.md` is still intentionally absent because `docs/evm/SPEC.md` and `docs/evm/ARCHITECTURE.md` currently describe the same deliberately narrow conservative boundary rather than a separate spec-versus-implementation divergence.
 
-Needed:
+Progress:
+
+- `docs/evm/QUIRKS.md` now captures the Etherscan spam-token symbol gotcha and the zero-amount row artifact, both grounded in `docs/known-transactions.md` evidence
+
+Remaining:
 
 - keep the new domain review docs current as code and support claims change
 - add `docs/evm/REVIEW.md` only once a real EVM spec-versus-implementation gap is grounded
-- continue filling `QUIRKS.md` only where concrete source-specific gotchas justify it
+- continue filling domain `QUIRKS.md` where concrete source-specific gotchas justify it
