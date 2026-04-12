@@ -62,7 +62,7 @@ func newRunCmd() *cobra.Command {
 		Short:        "Fetch all transactions and generate tax report",
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			payload, err := buildPayload(opts.normalizeOptions, cmd.ErrOrStderr())
+			payload, _, err := buildPayload(opts.normalizeOptions, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
@@ -110,7 +110,7 @@ func bindNormalizeFlags(cmd *cobra.Command, opts *normalizeOptions) {
 	cmd.Flags().StringVar(&opts.heliusKey, "helius-key", "", "Helius API key (or HELIUS_API_KEY env)")
 }
 
-func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, error) {
+func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, []normalize.SkippedRow, error) {
 	var allRaw []fetcher.RawTransaction
 	var wallets []string
 	walletSet := make(map[string]struct{})
@@ -119,13 +119,13 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 	opts.heliusKey = envOrValue(opts.heliusKey, "HELIUS_API_KEY")
 
 	if len(opts.ethWallets) == 0 && len(opts.solWallets) == 0 && len(opts.hlWallets) == 0 && opts.robinhoodCSV == "" {
-		return types.TxPayload{}, fmt.Errorf("no input source specified: provide at least one wallet flag or --robinhood-csv")
+		return types.TxPayload{}, nil, fmt.Errorf("no input source specified: provide at least one wallet flag or --robinhood-csv")
 	}
 	if len(opts.ethWallets) > 0 && opts.etherscanKey == "" {
-		return types.TxPayload{}, fmt.Errorf("etherscan API key required: pass --etherscan-key or set ETHERSCAN_API_KEY")
+		return types.TxPayload{}, nil, fmt.Errorf("etherscan API key required: pass --etherscan-key or set ETHERSCAN_API_KEY")
 	}
 	if len(opts.solWallets) > 0 && opts.heliusKey == "" {
-		return types.TxPayload{}, fmt.Errorf("helius API key required: pass --helius-key or set HELIUS_API_KEY")
+		return types.TxPayload{}, nil, fmt.Errorf("helius API key required: pass --helius-key or set HELIUS_API_KEY")
 	}
 
 	for _, ethWallet := range opts.ethWallets {
@@ -139,7 +139,7 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 		fmt.Fprintf(stderr, "Fetching %s for %s...\n", ethFetcher.Name(), ethWallet)
 		ethTxs, err := ethFetcher.Fetch(ethWallet)
 		if err != nil {
-			return types.TxPayload{}, fmt.Errorf("ethereum fetch: %w", err)
+			return types.TxPayload{}, nil, fmt.Errorf("ethereum fetch: %w", err)
 		}
 		allRaw = append(allRaw, ethTxs...)
 
@@ -147,7 +147,7 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 		fmt.Fprintf(stderr, "Fetching %s for %s...\n", arbFetcher.Name(), ethWallet)
 		arbTxs, err := arbFetcher.Fetch(ethWallet)
 		if err != nil {
-			return types.TxPayload{}, fmt.Errorf("arbitrum fetch: %w", err)
+			return types.TxPayload{}, nil, fmt.Errorf("arbitrum fetch: %w", err)
 		}
 		allRaw = append(allRaw, arbTxs...)
 	}
@@ -163,7 +163,7 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 		fmt.Fprintf(stderr, "Fetching %s for %s...\n", hFetcher.Name(), solWallet)
 		solTxs, err := hFetcher.Fetch(solWallet)
 		if err != nil {
-			return types.TxPayload{}, fmt.Errorf("solana fetch: %w", err)
+			return types.TxPayload{}, nil, fmt.Errorf("solana fetch: %w", err)
 		}
 		allRaw = append(allRaw, solTxs...)
 	}
@@ -179,7 +179,7 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 		fmt.Fprintf(stderr, "Fetching %s for %s...\n", hlFetcher.Name(), hlWallet)
 		hlTxs, err := hlFetcher.Fetch(hlWallet)
 		if err != nil {
-			return types.TxPayload{}, fmt.Errorf("hyperliquid fetch: %w", err)
+			return types.TxPayload{}, nil, fmt.Errorf("hyperliquid fetch: %w", err)
 		}
 		allRaw = append(allRaw, hlTxs...)
 	}
@@ -191,7 +191,7 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 		fmt.Fprintf(stderr, "Fetching %s...\n", rhFetcher.Name())
 		rhTxs, err := rhFetcher.Fetch("")
 		if err != nil {
-			return types.TxPayload{}, fmt.Errorf("robinhood parse: %w", err)
+			return types.TxPayload{}, nil, fmt.Errorf("robinhood parse: %w", err)
 		}
 		allRaw = append(allRaw, rhTxs...)
 	}
@@ -199,10 +199,16 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 	fmt.Fprintf(stderr, "Fetched %d raw transactions total\n", len(allRaw))
 
 	pp := price.NewProvider()
-	normalized, err := normalize.Normalize(allRaw, wallets, pp)
-	if err != nil {
-		return types.TxPayload{}, fmt.Errorf("normalization: %w", err)
+	result := normalize.NormalizeWithDiagnostics(allRaw, wallets, pp)
+
+	if len(result.Skipped) > 0 {
+		fmt.Fprintf(stderr, "Normalization warnings:\n")
+		for _, s := range result.Skipped {
+			fmt.Fprintf(stderr, "  skipping tx %s: %s\n", s.TxID, s.Reason)
+		}
 	}
+
+	normalized := result.Transactions
 
 	normalized = transfer.MatchTransfers(normalized, wallets)
 
@@ -214,7 +220,7 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, err
 		Version:      payloadVersion,
 		Wallets:      wallets,
 		Transactions: normalized,
-	}, nil
+	}, result.Skipped, nil
 }
 
 func marshalPayload(payload types.TxPayload) ([]byte, error) {

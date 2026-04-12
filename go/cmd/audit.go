@@ -40,19 +40,22 @@ func newAuditCaptureCmd() *cobra.Command {
 		Args:         cobra.ExactArgs(1),
 		SilenceUsage: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			payload, err := buildPayload(*opts, cmd.ErrOrStderr())
+			payload, skipped, err := buildPayload(*opts, cmd.ErrOrStderr())
 			if err != nil {
 				return err
 			}
 
 			outputPath := args[0]
 			commandLine := captureRerunCommand()
-			if err := audittool.WriteCaptureArtifacts(outputPath, payload, commandLine); err != nil {
+			if err := audittool.WriteCaptureArtifacts(outputPath, payload, commandLine, skipped); err != nil {
 				return err
 			}
 
 			fmt.Fprintf(cmd.ErrOrStderr(), "Wrote normalized JSON to %s\n", outputPath)
 			fmt.Fprintf(cmd.ErrOrStderr(), "Recorded command in %s.command\n", outputPath)
+			if len(skipped) > 0 {
+				fmt.Fprintf(cmd.ErrOrStderr(), "Wrote %d skipped row(s) to %s.skipped.json\n", len(skipped), outputPath)
+			}
 			return nil
 		},
 	}

@@ -37,7 +37,7 @@ Important named constructs:
 ## Data flow
 
 - `audit capture OUTPUT_JSON` reuses `buildPayload` from `go/cmd/main.go`, then writes the normalized payload through `WriteCaptureArtifacts`.
-- `WriteCaptureArtifacts` calls `WritePayload` for the JSON and also writes `OUTPUT_JSON.command` containing the shell-safe rerun command from `captureRerunCommand` and `ShellJoin`.
+- `WriteCaptureArtifacts` calls `WritePayload` for the JSON, writes `OUTPUT_JSON.command` containing the shell-safe rerun command from `captureRerunCommand` and `ShellJoin`, and writes `OUTPUT_JSON.skipped.json` when `[]SkippedRow` is non-empty.
 - `audit filter INPUT_JSON` parses CLI flags through `buildAuditFilters`, loads the payload with `LoadPayload`, filters rows with `FilterPayload`, and prints the resulting JSON.
 - `FilterPayload` preserves `version` and `wallets` and only drops transactions that fail `matchesFilters`.
 - `audit summary INPUT_JSON` optionally filters first, then calls `BuildSummary` and `MarshalSummary`.
@@ -45,7 +45,7 @@ Important named constructs:
 
 ## Outputs / side effects
 
-- `capture` writes a normalized JSON snapshot and a sibling `.command` file.
+- `capture` writes a normalized JSON snapshot, a sibling `.command` file, and a `.skipped.json` sidecar when any rows were skipped during normalization.
 - `filter` writes filtered JSON to stdout.
 - `summary` writes summary JSON to stdout.
 - The summary currently includes `transaction_count`, `unique_id_count`, `missing_raw_type_count`, `timestamp_range`, `by_source`, `by_chain`, `by_tx_type`, `by_wallet`, `by_raw_type`, `by_asset`, `zero_usd_value_rows`, and `suspicious_asset_rows`.

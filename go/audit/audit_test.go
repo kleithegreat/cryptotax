@@ -1,12 +1,14 @@
 package audit
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"slices"
 	"testing"
 	"time"
 
+	"github.com/kevin/cryptotax/normalize"
 	"github.com/kevin/cryptotax/types"
 )
 
@@ -255,7 +257,7 @@ func TestWriteCaptureArtifactsWritesPayloadAndCommandFile(t *testing.T) {
 	payload := testPayload()
 	commandLine := "nix run .#audit -- capture audit/normalized.json --eth-wallet 0xaaa"
 
-	if err := WriteCaptureArtifacts(outputPath, payload, commandLine); err != nil {
+	if err := WriteCaptureArtifacts(outputPath, payload, commandLine, nil); err != nil {
 		t.Fatalf("WriteCaptureArtifacts returned error: %v", err)
 	}
 
@@ -275,6 +277,67 @@ func TestWriteCaptureArtifactsWritesPayloadAndCommandFile(t *testing.T) {
 	expectedCommand := "# Re-run command\n" + commandLine + "\n"
 	if string(commandBytes) != expectedCommand {
 		t.Fatalf("unexpected command file contents:\n%s", string(commandBytes))
+	}
+
+	// No skipped rows sidecar when none provided
+	if _, err := os.Stat(outputPath + ".skipped.json"); err == nil {
+		t.Fatal("expected no skipped rows file when skipped is nil")
+	}
+}
+
+func TestWriteCaptureArtifactsWritesSkippedRowsSidecar(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	outputPath := filepath.Join(dir, "audit", "normalized.json")
+	payload := testPayload()
+	commandLine := "nix run .#audit -- capture audit/normalized.json --eth-wallet 0xaaa"
+	skipped := []normalize.SkippedRow{
+		{
+			TxID:    "bad-tx-1",
+			Source:  types.SourceEtherscan,
+			Chain:   types.ChainEthereum,
+			RawType: "token transfer",
+			Reason:  "missing wallet on raw transaction",
+		},
+		{
+			TxID:   "bad-tx-2",
+			Source: types.SourceHelius,
+			Chain:  types.ChainSolana,
+			Reason: "missing wallet on raw transaction",
+		},
+	}
+
+	if err := WriteCaptureArtifacts(outputPath, payload, commandLine, skipped); err != nil {
+		t.Fatalf("WriteCaptureArtifacts returned error: %v", err)
+	}
+
+	// Payload and command still written
+	if _, err := LoadPayload(outputPath); err != nil {
+		t.Fatalf("LoadPayload returned error: %v", err)
+	}
+	if _, err := os.ReadFile(outputPath + ".command"); err != nil {
+		t.Fatalf("read command file: %v", err)
+	}
+
+	// Skipped rows sidecar is machine-readable JSON
+	skippedBytes, err := os.ReadFile(outputPath + ".skipped.json")
+	if err != nil {
+		t.Fatalf("read skipped rows file: %v", err)
+	}
+
+	var loaded []normalize.SkippedRow
+	if err := json.Unmarshal(skippedBytes, &loaded); err != nil {
+		t.Fatalf("unmarshal skipped rows: %v", err)
+	}
+	if len(loaded) != 2 {
+		t.Fatalf("expected 2 skipped rows, got %d", len(loaded))
+	}
+	if loaded[0].TxID != "bad-tx-1" || loaded[0].Source != types.SourceEtherscan || loaded[0].Reason != "missing wallet on raw transaction" {
+		t.Fatalf("unexpected first skipped row: %#v", loaded[0])
+	}
+	if loaded[1].TxID != "bad-tx-2" || loaded[1].RawType != "" {
+		t.Fatalf("unexpected second skipped row: %#v", loaded[1])
 	}
 }
 

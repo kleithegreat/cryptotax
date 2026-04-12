@@ -11,6 +11,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/kevin/cryptotax/normalize"
 	"github.com/kevin/cryptotax/types"
 )
 
@@ -113,7 +114,7 @@ func WritePayload(path string, payload types.TxPayload) error {
 	return nil
 }
 
-func WriteCaptureArtifacts(outputPath string, payload types.TxPayload, commandLine string) error {
+func WriteCaptureArtifacts(outputPath string, payload types.TxPayload, commandLine string, skipped []normalize.SkippedRow) error {
 	if err := WritePayload(outputPath, payload); err != nil {
 		return err
 	}
@@ -122,6 +123,17 @@ func WriteCaptureArtifacts(outputPath string, payload types.TxPayload, commandLi
 	commandPath := outputPath + ".command"
 	if err := os.WriteFile(commandPath, []byte(commandContents), 0o644); err != nil {
 		return fmt.Errorf("write command file %s: %w", commandPath, err)
+	}
+
+	if len(skipped) > 0 {
+		skippedJSON, err := json.MarshalIndent(skipped, "", "  ")
+		if err != nil {
+			return fmt.Errorf("marshal skipped rows: %w", err)
+		}
+		skippedPath := outputPath + ".skipped.json"
+		if err := os.WriteFile(skippedPath, append(skippedJSON, '\n'), 0o644); err != nil {
+			return fmt.Errorf("write skipped rows %s: %w", skippedPath, err)
+		}
 	}
 
 	return nil
