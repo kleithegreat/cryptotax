@@ -12,14 +12,30 @@ import (
 	"github.com/kevin/cryptotax/types"
 )
 
-// Normalize converts chain-specific RawTransactions into the unified schema.
-func Normalize(
+// SkippedRow records a raw transaction that could not be normalized.
+type SkippedRow struct {
+	TxID    string       `json:"tx_id"`
+	Source  types.Source `json:"source"`
+	Chain   types.Chain  `json:"chain"`
+	RawType string       `json:"raw_type,omitempty"`
+	Reason  string       `json:"reason"`
+}
+
+// NormalizeResult bundles normalized transactions with structured diagnostics
+// about any rows that were skipped during normalization.
+type NormalizeResult struct {
+	Transactions []types.Transaction
+	Skipped      []SkippedRow
+}
+
+// NormalizeWithDiagnostics converts raw transactions into normalized form and
+// returns structured information about any rows that were skipped.
+func NormalizeWithDiagnostics(
 	raws []fetcher.RawTransaction,
 	wallets []string,
 	priceProvider *price.Provider,
-) ([]types.Transaction, error) {
-	var txs []types.Transaction
-	var errs []string
+) NormalizeResult {
+	var result NormalizeResult
 
 	walletSet := make(map[string]bool)
 	for _, w := range wallets {
@@ -29,20 +45,39 @@ func Normalize(
 	for _, raw := range raws {
 		tx, err := normalizeOne(raw, walletSet, priceProvider)
 		if err != nil {
-			errs = append(errs, fmt.Sprintf("skipping tx %s: %v", raw.ID, err))
+			result.Skipped = append(result.Skipped, SkippedRow{
+				TxID:    raw.ID,
+				Source:  raw.Source,
+				Chain:   raw.Chain,
+				RawType: raw.RawType,
+				Reason:  err.Error(),
+			})
 			continue
 		}
-		txs = append(txs, tx)
+		result.Transactions = append(result.Transactions, tx)
 	}
 
-	if len(errs) > 0 {
+	return result
+}
+
+// Normalize converts chain-specific RawTransactions into the unified schema.
+// Skipped rows are printed to stderr. Use NormalizeWithDiagnostics for
+// programmatic access to skip information.
+func Normalize(
+	raws []fetcher.RawTransaction,
+	wallets []string,
+	priceProvider *price.Provider,
+) ([]types.Transaction, error) {
+	result := NormalizeWithDiagnostics(raws, wallets, priceProvider)
+
+	if len(result.Skipped) > 0 {
 		fmt.Fprintf(os.Stderr, "Normalization warnings:\n")
-		for _, e := range errs {
-			fmt.Fprintf(os.Stderr, "  %s\n", e)
+		for _, s := range result.Skipped {
+			fmt.Fprintf(os.Stderr, "  skipping tx %s: %s\n", s.TxID, s.Reason)
 		}
 	}
 
-	return txs, nil
+	return result.Transactions, nil
 }
 
 func normalizeOne(

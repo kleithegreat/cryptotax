@@ -30,6 +30,9 @@ Important named constructs:
 - `fetcher.RawTransaction`
 - `buildPayload`
 - `Normalize`
+- `NormalizeWithDiagnostics`
+- `NormalizeResult`
+- `SkippedRow`
 - `normalizeOne`
 - `MatchTransfers`
 - `parseDecimal`
@@ -49,7 +52,7 @@ Important named constructs:
 - The top-level JSON object has `version`, `wallets`, and `transactions`.
 - Each normalized `Transaction` currently carries `id`, `timestamp`, `source`, `chain`, `tx_type`, `wallet`, `counterparty`, `sent`, `received`, `fee`, and `raw_type`.
 - Each `AssetAmount` currently carries one `asset` string, one decimal `amount` string, and one decimal `usd_value` string.
-- `Normalize` does not emit structured error rows. If one raw row fails normalization, it prints a warning to stderr and skips that row.
+- `Normalize` prints skipped-row warnings to stderr for backward compatibility. `NormalizeWithDiagnostics` returns a `NormalizeResult` containing both the normalized `Transactions` and structured `[]SkippedRow` diagnostics (tx ID, source, chain, raw type, reason). Callers that need programmatic access to skip information should use `NormalizeWithDiagnostics`.
 
 ## Current support boundary
 

@@ -26,15 +26,15 @@ This document tracks grounded gaps between `docs/ir/SPEC.md` and the current imp
 - What blocks resolution: `types.Transaction` currently has only `ID`, `RawType`, and the three asset legs, so adding grouping or representation metadata would be a cross-domain IR contract change.
 - Smallest good next checkpoint: decide whether the IR needs explicit event-grouping or representation-tier metadata before multi-leg support expands further.
 
-### Normalization failures are printed and skipped instead of becoming durable audit evidence
+### Normalization skip diagnostics are structured but not yet persisted by audit capture
 
-- Status: `open`
+- Status: `open` (partially addressed)
 - Issue type: `implementation gap`, `evidence gap`
-- Why this is a spec/implementation gap: `docs/ir/SPEC.md` requires unsupported behavior to remain explicit and `docs/repo/SPEC.md` requires evidence retention. Today a raw row that fails normalization can disappear from the captured payload entirely.
-- Current implementation evidence: `Normalize` in `go/normalize/normalize.go` collects per-row errors, prints them to stderr, and continues. `WriteCaptureArtifacts` in `go/audit/audit.go` persists the normalized payload plus the re-run command, but it does not persist normalization warnings or skipped-row details.
-- Desired direction implied by the spec: audit capture should leave a durable, machine-readable record of skipped normalization cases so a reviewer can tell whether the payload is complete.
-- What blocks resolution: the current capture contract persists only the payload JSON and the command sidecar, so there is no agreed place for structured normalization failures.
-- Smallest good next checkpoint: persist normalization warnings beside `audit capture` output in a stable machine-readable artifact.
+- Why this is a spec/implementation gap: `docs/ir/SPEC.md` requires unsupported behavior to remain explicit and `docs/repo/SPEC.md` requires evidence retention. A raw row that fails normalization can still disappear from the captured payload if the caller does not use the diagnostic surface.
+- Current implementation evidence: `NormalizeWithDiagnostics` in `go/normalize/normalize.go` returns a `NormalizeResult` with structured `[]SkippedRow` diagnostics (tx ID, source, chain, raw type, reason). `Normalize` wraps it and prints to stderr for backward compatibility. `buildPayload` in `go/cmd/main.go` still calls `Normalize` and does not yet consume or persist the structured skip information. `WriteCaptureArtifacts` in `go/audit/audit.go` persists the normalized payload plus the re-run command, but it does not persist skipped-row details.
+- Desired direction implied by the spec: `buildPayload` should switch to `NormalizeWithDiagnostics` and pass the `[]SkippedRow` through to audit capture as a durable, machine-readable sidecar artifact.
+- What blocks resolution: `buildPayload` returns `types.TxPayload` only; adding a skipped-row sidecar requires a caller-side change and an `audit capture` contract update.
+- Smallest good next checkpoint: update `buildPayload` to call `NormalizeWithDiagnostics`, surface `[]SkippedRow` alongside the payload, and persist it in `audit capture` output.
 
 ## Non-goals / intentionally narrow boundaries
 

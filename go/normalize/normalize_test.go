@@ -199,6 +199,153 @@ func TestNormalizeHeliusUsesSourceBackedSymbolForDisplayAndPricing(t *testing.T)
 	}
 }
 
+func TestNormalizeWithDiagnosticsSkipsRowWithMissingWallet(t *testing.T) {
+	t.Parallel()
+
+	result := NormalizeWithDiagnostics([]fetcher.RawTransaction{
+		{
+			ID:        "missing-wallet-tx",
+			Timestamp: 1700000000,
+			Source:    types.SourceEtherscan,
+			Chain:     types.ChainEthereum,
+			Wallet:    "",
+			FromAddr:  "0xaaa",
+			ToAddr:    "0xbbb",
+			Asset:     "ETH",
+			Amount:    "1.0",
+			RawType:   "transfer",
+		},
+	}, []string{"0xaaa"}, nil)
+
+	if len(result.Transactions) != 0 {
+		t.Fatalf("expected 0 normalized transactions, got %d", len(result.Transactions))
+	}
+	if len(result.Skipped) != 1 {
+		t.Fatalf("expected 1 skipped row, got %d", len(result.Skipped))
+	}
+	s := result.Skipped[0]
+	if s.TxID != "missing-wallet-tx" {
+		t.Fatalf("expected skipped tx_id %q, got %q", "missing-wallet-tx", s.TxID)
+	}
+	if s.Source != types.SourceEtherscan {
+		t.Fatalf("expected skipped source %q, got %q", types.SourceEtherscan, s.Source)
+	}
+	if s.Chain != types.ChainEthereum {
+		t.Fatalf("expected skipped chain %q, got %q", types.ChainEthereum, s.Chain)
+	}
+	if s.RawType != "transfer" {
+		t.Fatalf("expected skipped raw_type %q, got %q", "transfer", s.RawType)
+	}
+	if s.Reason == "" {
+		t.Fatal("expected non-empty skip reason")
+	}
+}
+
+func TestNormalizeWithDiagnosticsPartitionsValidAndInvalidRows(t *testing.T) {
+	t.Parallel()
+
+	result := NormalizeWithDiagnostics([]fetcher.RawTransaction{
+		{
+			ID:        "good-tx",
+			Timestamp: 1700000000,
+			Source:    types.SourceRobinhood,
+			Chain:     types.ChainRobinhood,
+			Wallet:    "rh-account",
+			Asset:     "BTC",
+			Amount:    "0.5",
+			USDPrice:  "15000",
+			RawType:   "BUY",
+		},
+		{
+			ID:        "bad-tx",
+			Timestamp: 1700000000,
+			Source:    types.SourceHelius,
+			Chain:     types.ChainSolana,
+			Wallet:    "",
+			Asset:     "SOL",
+			Amount:    "1.0",
+			RawType:   "TRANSFER",
+		},
+		{
+			ID:        "another-good-tx",
+			Timestamp: 1700000001,
+			Source:    types.SourceRobinhood,
+			Chain:     types.ChainRobinhood,
+			Wallet:    "rh-account",
+			Asset:     "ETH",
+			Amount:    "2.0",
+			USDPrice:  "4000",
+			RawType:   "BUY",
+		},
+	}, []string{"rh-account"}, nil)
+
+	if len(result.Transactions) != 2 {
+		t.Fatalf("expected 2 normalized transactions, got %d", len(result.Transactions))
+	}
+	if len(result.Skipped) != 1 {
+		t.Fatalf("expected 1 skipped row, got %d", len(result.Skipped))
+	}
+	if result.Transactions[0].ID != "good-tx" {
+		t.Fatalf("expected first tx ID %q, got %q", "good-tx", result.Transactions[0].ID)
+	}
+	if result.Transactions[1].ID != "another-good-tx" {
+		t.Fatalf("expected second tx ID %q, got %q", "another-good-tx", result.Transactions[1].ID)
+	}
+	if result.Skipped[0].TxID != "bad-tx" {
+		t.Fatalf("expected skipped tx ID %q, got %q", "bad-tx", result.Skipped[0].TxID)
+	}
+}
+
+func TestNormalizeWithDiagnosticsEmptyInput(t *testing.T) {
+	t.Parallel()
+
+	result := NormalizeWithDiagnostics(nil, nil, nil)
+
+	if len(result.Transactions) != 0 {
+		t.Fatalf("expected 0 transactions, got %d", len(result.Transactions))
+	}
+	if len(result.Skipped) != 0 {
+		t.Fatalf("expected 0 skipped, got %d", len(result.Skipped))
+	}
+}
+
+func TestNormalizeBackwardCompatibleWithSkippedRows(t *testing.T) {
+	t.Parallel()
+
+	txs, err := Normalize([]fetcher.RawTransaction{
+		{
+			ID:        "good-tx",
+			Timestamp: 1700000000,
+			Source:    types.SourceRobinhood,
+			Chain:     types.ChainRobinhood,
+			Wallet:    "rh-account",
+			Asset:     "BTC",
+			Amount:    "0.5",
+			USDPrice:  "15000",
+			RawType:   "BUY",
+		},
+		{
+			ID:        "bad-tx",
+			Timestamp: 1700000000,
+			Source:    types.SourceHelius,
+			Chain:     types.ChainSolana,
+			Wallet:    "",
+			Asset:     "SOL",
+			Amount:    "1.0",
+		},
+	}, []string{"rh-account"}, nil)
+	if err != nil {
+		t.Fatalf("Normalize returned error: %v", err)
+	}
+
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 normalized transaction, got %d", len(txs))
+	}
+	if txs[0].ID != "good-tx" {
+		t.Fatalf("expected tx ID %q, got %q", "good-tx", txs[0].ID)
+	}
+}
+
 func TestNormalizeHeliusPumpfunMintRemainsConservativeWithoutSourceSymbol(t *testing.T) {
 	t.Parallel()
 

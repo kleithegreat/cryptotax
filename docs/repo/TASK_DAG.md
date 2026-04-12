@@ -58,6 +58,8 @@ It should track only work or checkpoints that are already grounded in repository
 | `hyperliquid.perp_semantics_upgrade` | `blocked` | Upgrade Hyperliquid perp handling beyond the current spot-like `buy` / `sell` / `swap` approximation. | `docs.review.hyperliquid` | `verification.expand_human_verified_exemplars`, `decision.ir_contract_refinement`, `decision.hyperliquid_perp_model_boundary` | `core.accounting_support_upgrade` | `docs/hyperliquid/SPEC.md`, `docs/hyperliquid/ARCHITECTURE.md`, `docs/known-transactions.md` |
 | `evm.bridge_swap_support_upgrade` | `blocked` | Expand EVM bridge or swap support beyond the intentionally narrow confirmed bridge matcher and conservative split-row handling. | `docs.review.evm` | `verification.expand_human_verified_exemplars` | downstream EVM support-claim updates | `docs/evm/SPEC.md`, `docs/evm/ARCHITECTURE.md`, `docs/known-transactions.md` |
 | `core.accounting_support_upgrade` | `blocked` | Upgrade core accounting semantics beyond today's conservative downstream handling once upstream IR and normalization boundaries are explicit. | `docs.review.core` | `decision.ir_contract_refinement`, `decision.hyperliquid_negative_funding_output`, `decision.hyperliquid_perp_model_boundary` | stronger supported output claims in the Haskell core | `docs/core/SPEC.md`, `docs/core/ARCHITECTURE.md`, `docs/ir/SPEC.md`, `docs/repo/REVIEW.md` |
+| `ir.skipped_row_structured_diagnostics` | `done` | `NormalizeWithDiagnostics` returns structured `[]SkippedRow` alongside normalized transactions. `Normalize` wraps it with stderr logging for backward compatibility. | `docs.review.ir` | - | `ir.skipped_row_audit_persistence` | `go/normalize/normalize.go`, `go/normalize/normalize_test.go`, `docs/ir/ARCHITECTURE.md`, `docs/ir/REVIEW.md` |
+| `ir.skipped_row_audit_persistence` | `ready` | Update `buildPayload` to call `NormalizeWithDiagnostics`, thread `[]SkippedRow` through to audit capture, and persist it as a machine-readable sidecar artifact. | `ir.skipped_row_structured_diagnostics` | - | cleaner audit evidence for payload completeness | `docs/ir/REVIEW.md`, `go/cmd/main.go`, `go/audit/audit.go` |
 
 ## Initial Critical Paths
 
@@ -65,6 +67,10 @@ It should track only work or checkpoints that are already grounded in repository
 - `verification.expand_human_verified_exemplars` -> `decision.hyperliquid_negative_funding_output` -> `hyperliquid.funding_evidence_and_expense_semantics_upgrade` -> `core.accounting_support_upgrade`
 - `verification.expand_human_verified_exemplars` -> `decision.hyperliquid_perp_model_boundary` -> `hyperliquid.perp_semantics_upgrade` -> `core.accounting_support_upgrade`
 - `verification.expand_human_verified_exemplars` -> `evm.bridge_swap_support_upgrade`
+
+## Ready Now
+
+- `ir.skipped_row_audit_persistence`
 
 ## In Progress
 
