@@ -10,13 +10,13 @@ Agents must preserve source-backed details and avoid presenting perp activity as
 
 ## Current support boundary
 
-### Supported or intentionally modeled
+### Supported
 
 - funding rows represented explicitly as `funding_payment`
 - positive funding preserved as received USDC and available to downstream income handling
 - negative funding preserved as sent USDC rather than dropped
 
-### Unsupported but surfaced or still approximate
+### Unsupported but surfaced
 
 - perpetual opening and closing activity that is currently approximated too much like spot
 - multi-row fill groupings that may represent one economic perp event

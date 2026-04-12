@@ -25,11 +25,11 @@ Where Helius or another adopted source also provides a source-backed display sym
 
 The Solana pipeline should preserve economically meaningful legs conservatively, even when one transaction contains many internal account moves.
 
-### Supported intent
+### Supported
 
 - simple transfer-like and swap-like cases where the source payload is clear enough to represent conservatively
 
-### Current-behavior-only or unsupported but surfaced
+### Unsupported but surfaced
 
 - multi-leg Solana transactions that explode into awkward rows
 - same-asset SOL-for-SOL swap-like rows caused by aggregator routing or internal wrapping behavior

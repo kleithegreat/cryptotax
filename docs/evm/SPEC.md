@@ -10,13 +10,13 @@ Agents must not claim a swap, bridge, or own-wallet transfer is fully verified u
 
 ## Current support boundary
 
-### Supported or intentionally narrow
+### Supported
 
 - conservative transfer-like handling for straightforward EVM token and native-asset movement
 - narrow own-wallet transfer matching where the repository has enough evidence to justify it
 - the current confirmed bridge matcher only for the documented same-wallet, cross-chain, same-asset pattern already adopted in the codebase
 
-### Unsupported but surfaced or still approximate
+### Unsupported but surfaced
 
 - broad swap reconstruction for arbitrary multi-leg contract interactions
 - generalized bridge inference

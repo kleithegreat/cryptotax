@@ -38,7 +38,7 @@ The core should not own:
 - the small local end-to-end golden fixture covering buy, sell, and own-wallet transfer behavior
 - FIFO lot accounting for supported normalized events that map cleanly into current core semantics
 
-### Current-behavior-only or still incomplete
+### Current-behavior-only
 
 - many real-wallet cases that reach the core through current normalization snapshots
 - any behavior that is guarded only by current-behavior fixtures rather than evidence-backed semantic proof
