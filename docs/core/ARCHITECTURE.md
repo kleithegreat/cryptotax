@@ -42,16 +42,19 @@ Important named constructs:
 - `handleSell` builds a `Disposal` from `txSent` and `feeUSD`, then calls `Lot.dispose` to consume existing lots and emit `GainLoss` rows.
 - `handleSwap` also builds a `Disposal` from `txSent`, then acquires a new lot for `txReceived` after the disposal succeeds.
 - `handleIncome` routes inbound `income` rows to `recordIncomeReceipt`, which both creates a lot at fair market value and records an entry in `prIncome`.
-- `handleFunding` treats positive `funding_payment` rows as income receipts and treats negative `funding_payment` rows as unsupported expenses by appending an error string to `prErrors`.
+- `handleFunding` treats positive `funding_payment` rows as income receipts and negative `funding_payment` rows as structured `FundingExpense` entries in `prFundingExpenses`.
+- `handlePerpOpen` is a no-op — perp opens do not create phantom lots.
+- `handlePerpClose` uses `txClosedPnl` to emit a `PerpPnlEntry` in `prPerpPnl`. If `closed_pnl` is absent, an error is recorded.
 - `TransferIn` and `TransferOut` rows currently leave the accumulator unchanged.
 - `render8949CSV` renders only `prGainLosses` to CSV.
 
 ## Outputs / side effects
 
-- `Main.main` writes the CSV file selected by `--output`.
+- `Main.main` writes the 8949 CSV file selected by `--output`.
+- `Main.main` writes `funding_expenses.csv` alongside the 8949 output when funding expenses exist.
+- `Main.main` writes `perp_pnl.csv` alongside the 8949 output when perp PnL entries exist.
 - `Main.main` writes warning lines for every entry in `prErrors`.
-- `Main.main` prints aggregate gain/loss and aggregate income totals to stderr.
-- The only structured file output today is the 8949-oriented CSV rendered by `render8949CSV`.
+- `Main.main` prints aggregate gain/loss, income, funding expense, and perp PnL totals to stderr.
 
 ## Current support boundary
 
@@ -70,15 +73,17 @@ Important named constructs:
 ### Unsupported but surfaced behavior
 
 - Insufficient inventory becomes a `prErrors` entry from `Lot.dispose`.
-- Negative `funding_payment` rows remain explicit unsupported errors instead of being converted into fake spot semantics.
+- Perp close without `closed_pnl` becomes a `prErrors` entry.
 - Any upstream approximation that already arrived as `buy`, `sell`, or `swap` is processed as-is. The core does not recover lost source semantics.
 
 ## Current known approximations or conservative behavior
 
 - `Swap` is treated as one disposal plus one acquisition using the upstream USD legs already present in the IR.
 - `recordIncomeReceipt` captures income economically, but `render8949CSV` does not emit a separate income report. Income is only accumulated in `prIncome` and summarized to stderr.
+- Negative funding does not affect USDC inventory (no lot consumption). The structured expense report is informational.
 - `TransferIn` and `TransferOut` currently do not affect lots or final output.
 
 ## Notable current divergence from spec
 
-- `processTx` drops every `TransferIn` and `TransferOut` row without an error or explicit unsupported output. That means conservative upstream transfer-like rows do not remain visible once they reach the core. This is a concrete mismatch with the spec's surfacing requirement and likely belongs in a future `docs/core/REVIEW.md`.
+- `processTx` drops every `TransferIn` and `TransferOut` row without an error or explicit unsupported output. That means conservative upstream transfer-like rows do not remain visible once they reach the core. This is a concrete mismatch with the spec's surfacing requirement and is tracked in `docs/core/REVIEW.md`.
+- The perp PnL report uses the exchange-reported `ClosedPnl` as the realized PnL value. The 8949 representation (cost-basis and proceeds columns for derivatives) is unresolved and tracked in `docs/core/REVIEW.md`.

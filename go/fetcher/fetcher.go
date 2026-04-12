@@ -46,4 +46,8 @@ type RawTransaction struct {
 
 	// Original type string from the source for debugging.
 	RawType string
+
+	// Hyperliquid perp fields — populated only for fill rows.
+	ClosedPnl     string // exchange-reported realized PnL for this fill
+	StartPosition string // position size before this fill
 }

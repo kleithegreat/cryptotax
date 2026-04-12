@@ -346,6 +346,142 @@ func TestNormalizeBackwardCompatibleWithSkippedRows(t *testing.T) {
 	}
 }
 
+func TestNormalizeHyperliquidPerpOpenEmitsPerpOpenType(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:            "fill-open-long",
+		Timestamp:     time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC).Unix(),
+		Source:        types.SourceHyperliquid,
+		Chain:         types.ChainHyperliquid,
+		Wallet:        "0xwallet",
+		Asset:         "BTC",
+		Amount:        "0.0004",
+		USDPrice:      "124825",
+		RawType:       "Open Long",
+		ClosedPnl:     "0.0",
+		StartPosition: "0.0",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxPerpOpen {
+		t.Fatalf("expected tx_type %q, got %q", types.TxPerpOpen, tx.TxType)
+	}
+	if tx.Received == nil {
+		t.Fatal("expected received leg for perp open")
+	}
+	if tx.Received.Asset != "BTC" {
+		t.Fatalf("expected asset BTC, got %q", tx.Received.Asset)
+	}
+	if tx.ClosedPnl != nil {
+		t.Fatalf("expected no closed_pnl on open, got %q", *tx.ClosedPnl)
+	}
+}
+
+func TestNormalizeHyperliquidPerpCloseEmitsPerpCloseWithClosedPnl(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:            "fill-close-short",
+		Timestamp:     time.Date(2025, 2, 1, 0, 0, 0, 0, time.UTC).Unix(),
+		Source:        types.SourceHyperliquid,
+		Chain:         types.ChainHyperliquid,
+		Wallet:        "0xwallet",
+		Asset:         "SOL",
+		Amount:        "10.5",
+		USDPrice:      "200",
+		RawType:       "Close Short",
+		ClosedPnl:     "-42.50",
+		StartPosition: "10.5",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxPerpClose {
+		t.Fatalf("expected tx_type %q, got %q", types.TxPerpClose, tx.TxType)
+	}
+	if tx.Sent == nil {
+		t.Fatal("expected sent leg for perp close")
+	}
+	if tx.Sent.Asset != "SOL" {
+		t.Fatalf("expected asset SOL, got %q", tx.Sent.Asset)
+	}
+	if tx.ClosedPnl == nil {
+		t.Fatal("expected closed_pnl on perp close")
+	}
+	if *tx.ClosedPnl != "-42.50" {
+		t.Fatalf("expected closed_pnl %q, got %q", "-42.50", *tx.ClosedPnl)
+	}
+}
+
+func TestNormalizeHeliusAssetCanonicalPopulatedWhenSymbolPresent(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:          "sol-transfer-usdc",
+		Timestamp:   1700000000,
+		Source:      types.SourceHelius,
+		Chain:       types.ChainSolana,
+		Wallet:      "wallet",
+		FromAddr:    "sender",
+		ToAddr:      "wallet",
+		Asset:       "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+		AssetSymbol: "USDC",
+		Amount:      "100.0",
+		RawType:     "TRANSFER",
+	}, map[string]bool{"wallet": true}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.Received == nil {
+		t.Fatal("expected received leg")
+	}
+	if tx.Received.Asset != "USDC" {
+		t.Fatalf("expected display asset USDC, got %q", tx.Received.Asset)
+	}
+	if tx.Received.AssetCanonical == nil {
+		t.Fatal("expected asset_canonical to be populated when symbol differs from mint")
+	}
+	if *tx.Received.AssetCanonical != "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v" {
+		t.Fatalf("expected asset_canonical to be the mint, got %q", *tx.Received.AssetCanonical)
+	}
+}
+
+func TestNormalizeHeliusAssetCanonicalNilWhenNoSymbol(t *testing.T) {
+	t.Parallel()
+
+	mint := "7GCihgDB8fe6KNjn2MYtkzZcRjQy3t9GHdC8uHYmW2hr"
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "sol-transfer-mint-only",
+		Timestamp: 1700000000,
+		Source:    types.SourceHelius,
+		Chain:     types.ChainSolana,
+		Wallet:    "wallet",
+		FromAddr:  "sender",
+		ToAddr:    "wallet",
+		Asset:     mint,
+		Amount:    "50.0",
+		RawType:   "TRANSFER",
+	}, map[string]bool{"wallet": true}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.Received == nil {
+		t.Fatal("expected received leg")
+	}
+	if tx.Received.Asset != mint {
+		t.Fatalf("expected display asset to be mint, got %q", tx.Received.Asset)
+	}
+	if tx.Received.AssetCanonical != nil {
+		t.Fatalf("expected asset_canonical nil when display=mint, got %q", *tx.Received.AssetCanonical)
+	}
+}
+
 func TestNormalizeHeliusPumpfunMintRemainsConservativeWithoutSourceSymbol(t *testing.T) {
 	t.Parallel()
 

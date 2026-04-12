@@ -99,17 +99,19 @@ func (h *Hyperliquid) Fetch(wallet string) ([]RawTransaction, error) {
 		}
 
 		txs = append(txs, RawTransaction{
-			ID:        fill.Hash,
-			Timestamp: fill.Time / 1000, // ms → seconds
-			Source:    types.SourceHyperliquid,
-			Chain:     types.ChainHyperliquid,
-			Wallet:    wallet,
-			Asset:     coin,
-			Amount:    fill.Sz,
-			USDPrice:  fill.Px,
-			Fee:       fill.Fee,
-			FeeAsset:  fill.FeeToken,
-			RawType:   fill.Dir,
+			ID:            fill.Hash,
+			Timestamp:     fill.Time / 1000, // ms → seconds
+			Source:        types.SourceHyperliquid,
+			Chain:         types.ChainHyperliquid,
+			Wallet:        wallet,
+			Asset:         coin,
+			Amount:        fill.Sz,
+			USDPrice:      fill.Px,
+			Fee:           fill.Fee,
+			FeeAsset:      fill.FeeToken,
+			RawType:       fill.Dir,
+			ClosedPnl:     fill.ClosedPnl,
+			StartPosition: fill.StartPosition,
 		})
 	}
 

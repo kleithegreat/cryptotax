@@ -207,8 +207,8 @@ below for new evidence.
 - Source reference: `TODO: confirm fill 0x296c458688c54a1e2ae6042cfc24eb02026d006c23c868f0cd34f0d947c92408 from Hyperliquid and whether it was an opening perp trade`
 - Filtered normalized case: [hl-open-long-btc.json](../audit/cases/hl-open-long-btc.json)
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id 0x296c458688c54a1e2ae6042cfc24eb02026d006c23c868f0cd34f0d947c92408 --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca`
-- Current normalized JSON: `1 row; buy BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466`
-- Human verification required: `TODO confirm this is a perp position increase rather than a spot acquisition and decide how it should map once perp inventory/PnL semantics exist`
+- Current normalized JSON: `the checked-in filtered case predates the perp-decision wave and is stale; current implementation should emit 1 row; perp_open BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466`
+- Human verification required: `TODO confirm this is a perp position increase rather than a spot acquisition, then decide whether the current no-lot perp_open boundary is acceptable until a fuller position model exists`
 
 #### 15. Hyperliquid perpetual close-short approximation
 
@@ -217,8 +217,8 @@ below for new evidence.
 - Source reference: `TODO: confirm fill 0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e from Hyperliquid and whether all four rows are one short close sequence`
 - Filtered normalized case: [hl-close-short-sol.json](../audit/cases/hl-close-short-sol.json)
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id 0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca`
-- Current normalized JSON: `4 rows; sell SOL totals 31.34 units across four partial fills with per-row USDC fees`
-- Human verification required: `TODO confirm these partial rows belong to one perp close event, confirm fee conservation, and decide whether the current spot-sell approximation is acceptable for tax output`
+- Current normalized JSON: `the checked-in filtered case predates the perp-decision wave and is stale; current implementation should emit 4 rows; perp_close SOL totaling 31.34 units across four partial fills with per-row USDC fees plus exchange closed_pnl on each row`
+- Human verification required: `TODO confirm these partial rows belong to one perp close event, confirm fee conservation, and decide whether per-fill closed_pnl should remain separate or be consolidated for later reporting`
 
 ## Transaction Review Template
 

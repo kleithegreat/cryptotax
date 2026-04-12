@@ -8,13 +8,9 @@ This document tracks grounded gaps between `docs/ir/SPEC.md` and the current imp
 
 ### Canonical asset identity and display identity collapse into one IR field
 
-- Status: `needs_human_decision`
-- Issue type: `schema/contract gap`, `human-decision blocker`
-- Why this is a spec/implementation gap: `docs/ir/SPEC.md` says asset fields should preserve source-backed identity and keep canonical identity separate from display identity as far upstream as the schema allows. The current IR contract only exposes one `asset` string per leg.
-- Current implementation evidence: `fetcher.RawTransaction` in `go/fetcher/fetcher.go` can carry `Asset` plus `AssetSymbol`. `convertSwap`, `convertTransfer`, and `convertGeneric` in `go/fetcher/helius.go` preserve that pair, but `normalizeHelius` in `go/normalize/normalize.go` collapses it through `heliusDisplayAsset` into `types.AssetAmount.Asset` in `go/types/types.go`. Downstream code then keys off that single string through `transfer.sameAsset` in `go/transfer/match.go`, `accumulateAsset` in `go/audit/audit.go`, and `AssetSymbol`, `Lot.acquire`, and `Lot.dispose` in `haskell/src/Types.hs`, `haskell/src/Lot.hs`, and `haskell/src/GainLoss.hs`.
-- Desired direction implied by the spec: canonical identity should stay explicit across the Go-to-Haskell boundary, while display labels remain secondary metadata instead of the accounting key.
-- What blocks resolution: separating canonical and display identity would change the normalized IR contract in `go/types/types.go` and `haskell/src/Types.hs`, which needs a human decision.
-- Smallest good next checkpoint: decide whether `AssetAmount` grows separate canonical and display fields or whether the IR needs a parallel asset-metadata container before implementation work starts.
+- Status: `done`
+- Issue type: resolved
+- Resolution: Decision Option B adopted — `AssetAmount` gained an optional `asset_canonical` field in both Go (`go/types/types.go`) and Haskell (`haskell/src/Types.hs`). The Helius normalizer populates `asset_canonical` with the Solana mint when a source-backed display symbol is present. Old payloads without the field parse as `Nothing` (backward compatible). Downstream consumers (lot tracking, transfer matching, audit accumulation) have not yet adopted canonical identity; that adoption is incremental and separate from this schema change.
 
 ### The IR cannot distinguish intentional multi-row preservation from current-behavior splitting
 

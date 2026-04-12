@@ -17,6 +17,8 @@ module Types
   , AssetSymbol(..)
   , TokenAmount(..)
   , USD(..)
+  , FundingExpense(..)
+  , PerpPnlEntry(..)
   , parseDecimal
   ) where
 
@@ -99,6 +101,8 @@ data TxType
   | TransferOut
   | Income
   | FundingPayment
+  | PerpOpen
+  | PerpClose
   deriving (Show, Eq, Generic)
 
 instance FromJSON TxType where
@@ -110,6 +114,8 @@ instance FromJSON TxType where
     "transfer_out"    -> pure TransferOut
     "income"          -> pure Income
     "funding_payment" -> pure FundingPayment
+    "perp_open"       -> pure PerpOpen
+    "perp_close"      -> pure PerpClose
     other             -> fail $ "Unknown tx_type: " ++ T.unpack other
 
 instance ToJSON TxType where
@@ -121,25 +127,29 @@ instance ToJSON TxType where
     TransferOut    -> "transfer_out"
     Income         -> "income"
     FundingPayment -> "funding_payment"
+    PerpOpen       -> "perp_open"
+    PerpClose      -> "perp_close"
 
 data AssetAmount = AssetAmount
-  { aaAsset    :: Text
-  , aaAmount   :: Text     -- parsed to Rational in the core
-  , aaUSDValue :: Text     -- parsed to Rational in the core
+  { aaAsset          :: Text
+  , aaAssetCanonical :: Maybe Text  -- canonical identity (e.g. Solana mint) when it differs from display
+  , aaAmount         :: Text        -- parsed to Rational in the core
+  , aaUSDValue       :: Text        -- parsed to Rational in the core
   } deriving (Show, Eq, Generic)
 
 instance FromJSON AssetAmount where
   parseJSON = withObject "AssetAmount" $ \v ->
-    AssetAmount <$> v .: "asset"
-                <*> v .: "amount"
-                <*> v .: "usd_value"
+    AssetAmount <$> v .:  "asset"
+                <*> v .:? "asset_canonical"
+                <*> v .:  "amount"
+                <*> v .:  "usd_value"
 
 instance ToJSON AssetAmount where
-  toJSON a = object
+  toJSON a = object $
     [ "asset"     .= aaAsset a
     , "amount"    .= aaAmount a
     , "usd_value" .= aaUSDValue a
-    ]
+    ] ++ maybe [] (\c -> ["asset_canonical" .= c]) (aaAssetCanonical a)
 
 data Transaction = Transaction
   { txId           :: Text
@@ -153,6 +163,7 @@ data Transaction = Transaction
   , txReceived     :: Maybe AssetAmount
   , txFee          :: Maybe AssetAmount
   , txRawType      :: Maybe Text
+  , txClosedPnl    :: Maybe Text  -- exchange-reported realized PnL (perp closes)
   } deriving (Show, Eq, Generic)
 
 instance FromJSON Transaction where
@@ -168,9 +179,10 @@ instance FromJSON Transaction where
                 <*> v .:? "received"
                 <*> v .:? "fee"
                 <*> v .:? "raw_type"
+                <*> v .:? "closed_pnl"
 
 instance ToJSON Transaction where
-  toJSON tx = object
+  toJSON tx = object $
     [ "id"           .= txId tx
     , "timestamp"    .= txTimestamp tx
     , "source"       .= txSource tx
@@ -182,7 +194,7 @@ instance ToJSON Transaction where
     , "received"     .= txReceived tx
     , "fee"          .= txFee tx
     , "raw_type"     .= txRawType tx
-    ]
+    ] ++ maybe [] (\p -> ["closed_pnl" .= p]) (txClosedPnl tx)
 
 -- ---------------------------------------------------------------------------
 -- Financial core types (internal to the engine, not from JSON)
@@ -216,3 +228,28 @@ data GainLoss = GainLoss
 
 data HoldingPeriod = ShortTerm | LongTerm
   deriving (Show, Eq)
+
+-- ---------------------------------------------------------------------------
+-- Supplemental output types — not 8949 disposals
+-- ---------------------------------------------------------------------------
+
+-- | A negative funding cash flow, kept separate from 8949 disposals and perp PnL.
+data FundingExpense = FundingExpense
+  { feTimestamp :: UTCTime
+  , feTxId      :: Text
+  , feAsset     :: AssetSymbol
+  , feAmount    :: TokenAmount
+  , feUSDValue  :: USD
+  } deriving (Show, Eq)
+
+-- | A realized perp PnL entry derived from the exchange's ClosedPnl field.
+-- This is intentionally separate from 8949 output because the cost-basis and
+-- proceeds representation for derivative PnL on Form 8949 is unresolved.
+data PerpPnlEntry = PerpPnlEntry
+  { ppTimestamp :: UTCTime
+  , ppTxId      :: Text
+  , ppAsset     :: AssetSymbol
+  , ppAmount    :: TokenAmount
+  , ppDirection :: Text         -- raw_type from IR (e.g. "Close Long")
+  , ppClosedPnl :: USD          -- exchange-reported realized PnL
+  } deriving (Show, Eq)

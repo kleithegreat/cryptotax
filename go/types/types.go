@@ -20,6 +20,8 @@ const (
 	TxTransferOut    TxType = "transfer_out"
 	TxIncome         TxType = "income"
 	TxFundingPayment TxType = "funding_payment"
+	TxPerpOpen       TxType = "perp_open"
+	TxPerpClose      TxType = "perp_close"
 )
 
 // Source identifies which fetcher produced the transaction.
@@ -56,13 +58,15 @@ type Transaction struct {
 	Received     *AssetAmount `json:"received"`
 	Fee          *AssetAmount `json:"fee"`
 	RawType      *string      `json:"raw_type"`
+	ClosedPnl    *string      `json:"closed_pnl,omitempty"`
 }
 
 // AssetAmount represents a quantity of a token with its USD valuation.
 // Amount and USDValue are strings to preserve exact decimal precision.
 // The Haskell core parses these into exact rationals — no floats anywhere.
 type AssetAmount struct {
-	Asset    string `json:"asset"`
-	Amount   string `json:"amount"`
-	USDValue string `json:"usd_value"`
+	Asset          string  `json:"asset"`
+	AssetCanonical *string `json:"asset_canonical,omitempty"`
+	Amount         string  `json:"amount"`
+	USDValue       string  `json:"usd_value"`
 }

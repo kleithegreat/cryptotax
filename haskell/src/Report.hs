@@ -2,6 +2,8 @@
 
 module Report
   ( render8949CSV
+  , renderFundingExpenseCSV
+  , renderPerpPnlCSV
   ) where
 
 import           Data.Text    (Text)
@@ -60,3 +62,44 @@ padZero t = if T.length t < 2 then "0" <> t else t
 
 padN :: Int -> Text -> Text
 padN n t = T.replicate (max 0 (n - T.length t)) "0" <> t
+
+-- ---------------------------------------------------------------------------
+-- Supplemental reports — separate from 8949
+-- ---------------------------------------------------------------------------
+
+-- | Render funding expenses as a structured CSV.
+renderFundingExpenseCSV :: [FundingExpense] -> Text
+renderFundingExpenseCSV expenses =
+  let header = "Date,Tx ID,Asset,Amount,USD Value"
+      rows   = map renderFundingRow expenses
+  in T.unlines (header : rows)
+
+renderFundingRow :: FundingExpense -> Text
+renderFundingRow fe =
+  T.intercalate ","
+    [ formatDate (feTimestamp fe)
+    , feTxId fe
+    , unAsset (feAsset fe)
+    , renderAmount (feAmount fe)
+    , renderUSD (feUSDValue fe)
+    ]
+
+-- | Render perp realized PnL as a structured CSV.
+-- This is intentionally separate from 8949 because the cost-basis/proceeds
+-- representation for derivative PnL on Form 8949 is unresolved.
+renderPerpPnlCSV :: [PerpPnlEntry] -> Text
+renderPerpPnlCSV entries =
+  let header = "Date,Tx ID,Asset,Amount,Direction,Realized PnL"
+      rows   = map renderPerpRow entries
+  in T.unlines (header : rows)
+
+renderPerpRow :: PerpPnlEntry -> Text
+renderPerpRow pp =
+  T.intercalate ","
+    [ formatDate (ppTimestamp pp)
+    , ppTxId pp
+    , unAsset (ppAsset pp)
+    , renderAmount (ppAmount pp)
+    , ppDirection pp
+    , renderUSD (ppClosedPnl pp)
+    ]

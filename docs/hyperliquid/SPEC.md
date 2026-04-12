@@ -10,28 +10,39 @@ Agents must preserve source-backed details and avoid presenting perp activity as
 
 ## Current support boundary
 
+The bullets below describe current implemented behavior. Per `docs/repo/TASK_DAG.md`, real-wallet Hyperliquid support-claim upgrades remain blocked by `verification.expand_human_verified_exemplars`; the separate funding and perp reports are implementation checkpoints, not human-verified tax-correctness claims.
+
 ### Supported
 
 - funding rows represented explicitly as `funding_payment`
 - positive funding preserved as received USDC and available to downstream income handling
-- negative funding preserved as sent USDC rather than dropped
+
+### Current-behavior-only
+
+- negative funding preserved as sent USDC and emitted as structured `FundingExpense` in `funding_expenses.csv`
+- perp fills classified as `perp_open` / `perp_close`, quarantined from spot FIFO
+- `ClosedPnl` propagated from the Hyperliquid API through normalization to the core for `perp_close`
+- perp close realized PnL emitted in `perp_pnl.csv` using exchange-reported `ClosedPnl`
 
 ### Unsupported but surfaced
 
-- perpetual opening and closing activity that is currently approximated too much like spot
 - multi-row fill groupings that may represent one economic perp event
-- final tax-output semantics for negative funding expense handling
+- partial-fill `ClosedPnl` consolidation (each API fill is one PnL entry)
+- 8949 representation of perp PnL (cost-basis/proceeds for derivatives)
+- negative funding does not consume USDC inventory (informational expense only)
+- funding market context still drops during normalization
 
 ## Rules
 
 - do not silently erase funding outflows
-- do not overclaim semantic certainty for perp fills
+- do not merge funding cash flows into perp PnL — keep them in separate output channels
+- do not route perp fills through spot FIFO (no phantom lots)
 - preserve enough information for later accounting improvements and human review
 
 ## Immediate priority cases
 
 The current highest-priority Hyperliquid work is:
 
-- evidence retention and linkage for funding rows
-- explicit support-boundary documentation for perp open/close cases
-- eventual separation of true spot-like inventory changes from perp position changes
+- evidence retention and linkage for funding rows (market context still lost during normalization)
+- human verification of real-wallet exemplars before upgrading support claims
+- deciding the 8949 representation for perp PnL

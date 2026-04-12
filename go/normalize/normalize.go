@@ -179,22 +179,24 @@ func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction, pp *
 
 	switch strings.ToUpper(raw.RawType) {
 	case "OPEN LONG", "OPEN SHORT":
-		// TODO: Hyperliquid perpetual positions are not spot acquisitions.
-		// This remains a best-effort proxy until the IR can model perp lots/PnL.
-		tx.TxType = types.TxBuy
+		// Perp opens are quarantined from spot FIFO. No phantom lots are created.
+		tx.TxType = types.TxPerpOpen
 		tx.Received = &types.AssetAmount{
 			Asset:    strings.ToUpper(raw.Asset),
 			Amount:   raw.Amount,
 			USDValue: usdValue,
 		}
 	case "CLOSE LONG", "CLOSE SHORT":
-		// TODO: Hyperliquid perpetual closes should reconcile against position
-		// state, not a spot inventory queue. Keep the approximation explicit.
-		tx.TxType = types.TxSell
+		// Perp closes carry ClosedPnl from the exchange for realized PnL output.
+		tx.TxType = types.TxPerpClose
 		tx.Sent = &types.AssetAmount{
 			Asset:    strings.ToUpper(raw.Asset),
 			Amount:   raw.Amount,
 			USDValue: usdValue,
+		}
+		if raw.ClosedPnl != "" {
+			closedPnl := raw.ClosedPnl
+			tx.ClosedPnl = &closedPnl
 		}
 	default:
 		// Spot trade
@@ -241,14 +243,16 @@ func normalizeHelius(
 		rcvUSD := resolveUSDPrice(heliusPriceLookupAsset(raw.Asset2, raw.Asset2Symbol), raw.Amount2, raw.Timestamp, pp)
 
 		tx.Sent = &types.AssetAmount{
-			Asset:    heliusDisplayAsset(raw.Asset, raw.AssetSymbol),
-			Amount:   raw.Amount,
-			USDValue: sentUSD,
+			Asset:          heliusDisplayAsset(raw.Asset, raw.AssetSymbol),
+			AssetCanonical: heliusCanonical(raw.Asset, raw.AssetSymbol),
+			Amount:         raw.Amount,
+			USDValue:       sentUSD,
 		}
 		tx.Received = &types.AssetAmount{
-			Asset:    heliusDisplayAsset(raw.Asset2, raw.Asset2Symbol),
-			Amount:   raw.Amount2,
-			USDValue: rcvUSD,
+			Asset:          heliusDisplayAsset(raw.Asset2, raw.Asset2Symbol),
+			AssetCanonical: heliusCanonical(raw.Asset2, raw.Asset2Symbol),
+			Amount:         raw.Amount2,
+			USDValue:       rcvUSD,
 		}
 
 		if raw.Fee != "" {
@@ -265,25 +269,26 @@ func normalizeHelius(
 
 	usdValue := resolveUSDPrice(heliusPriceLookupAsset(raw.Asset, raw.AssetSymbol), raw.Amount, raw.Timestamp, pp)
 	displayAsset := heliusDisplayAsset(raw.Asset, raw.AssetSymbol)
+	canonical := heliusCanonical(raw.Asset, raw.AssetSymbol)
 	movement := classifyAddressMovement(raw, wallets)
 
 	switch movement.txType {
 	case types.TxTransferOut:
 		tx.TxType = types.TxTransferOut
 		tx.Sent = &types.AssetAmount{
-			Asset: displayAsset, Amount: raw.Amount, USDValue: usdValue,
+			Asset: displayAsset, AssetCanonical: canonical, Amount: raw.Amount, USDValue: usdValue,
 		}
 	case types.TxSell:
 		tx.TxType = types.TxSell
 		tx.Sent = &types.AssetAmount{
-			Asset: displayAsset, Amount: raw.Amount, USDValue: usdValue,
+			Asset: displayAsset, AssetCanonical: canonical, Amount: raw.Amount, USDValue: usdValue,
 		}
 	case types.TxTransferIn:
 		// TODO: Distinguishing income from ordinary inbound transfers on Solana
 		// needs richer instruction-level modeling than Helius' summary rows.
 		tx.TxType = types.TxTransferIn
 		tx.Received = &types.AssetAmount{
-			Asset: displayAsset, Amount: raw.Amount, USDValue: usdValue,
+			Asset: displayAsset, AssetCanonical: canonical, Amount: raw.Amount, USDValue: usdValue,
 		}
 	default:
 		tx.TxType = movement.txType
@@ -384,6 +389,20 @@ func heliusDisplayAsset(assetID, symbol string) string {
 	// source-backed symbol is available instead of uppercasing it into a symbol-
 	// like string.
 	return strings.TrimSpace(assetID)
+}
+
+// heliusCanonical returns the mint as the canonical identity when a
+// source-backed symbol is present (meaning display and canonical differ).
+// Returns nil when they are the same (no symbol, display = mint already).
+func heliusCanonical(assetID, symbol string) *string {
+	symbol = strings.TrimSpace(symbol)
+	if symbol != "" {
+		// Display is the symbol; canonical is the mint.
+		id := strings.TrimSpace(assetID)
+		return &id
+	}
+	// Display is already the mint; no separate canonical needed.
+	return nil
 }
 
 func heliusPriceLookupAsset(assetID, symbol string) string {

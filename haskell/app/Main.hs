@@ -9,9 +9,11 @@ import           System.Environment   (getArgs)
 import           System.Exit          (exitFailure)
 import           System.IO            (hPutStrLn, stderr)
 
+import           System.FilePath (takeDirectory, (</>))
+
 import           Types
 import           GainLoss  (processTransactions, ProcessResult(..))
-import           Report    (render8949CSV)
+import           Report    (render8949CSV, renderFundingExpenseCSV, renderPerpPnlCSV)
 
 main :: IO ()
 main = do
@@ -49,6 +51,36 @@ main = do
 
       let incomeTotal = sum $ map (unUSD . glGain) (prIncome result)
       hPutStrLn stderr $ "Total income: $" ++ show (fromRational incomeTotal :: Double)
+
+      -- Supplemental: funding expenses report
+      let fundingExps = prFundingExpenses result
+      if null fundingExps
+        then pure ()
+        else do
+          let fundingFile = takeDirectory outputFile </> "funding_expenses.csv"
+          TIO.writeFile fundingFile (renderFundingExpenseCSV fundingExps)
+          let fundingTotal = sum $ map (unUSD . feUSDValue) fundingExps
+          hPutStrLn stderr $ "Total funding expenses: $"
+            ++ show (fromRational fundingTotal :: Double)
+          hPutStrLn stderr $ "Wrote "
+            ++ show (length fundingExps)
+            ++ " funding expense rows to "
+            ++ fundingFile
+
+      -- Supplemental: perp realized PnL report
+      let perpEntries = prPerpPnl result
+      if null perpEntries
+        then pure ()
+        else do
+          let perpFile = takeDirectory outputFile </> "perp_pnl.csv"
+          TIO.writeFile perpFile (renderPerpPnlCSV perpEntries)
+          let perpTotal = sum $ map (unUSD . ppClosedPnl) perpEntries
+          hPutStrLn stderr $ "Total perp realized PnL: $"
+            ++ show (fromRational perpTotal :: Double)
+          hPutStrLn stderr $ "Wrote "
+            ++ show (length perpEntries)
+            ++ " perp PnL rows to "
+            ++ perpFile
 
 parseOutputFlag :: [String] -> FilePath
 parseOutputFlag []                   = "8949_report.csv"

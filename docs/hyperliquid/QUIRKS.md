@@ -24,4 +24,4 @@ Hyperliquid fill records use `@N` notation for spot token identifiers (e.g., `@1
 
 When Hyperliquid returns multiple partial fills for one economic event, each fill gets its own API row with the same `hash`. The pipeline emits one normalized row per API row without any later consolidation step. This means one perp close or one large trade may appear as several separate rows in normalized output.
 
-Example from real-wallet audit cases in `docs/known-transactions.md`: the `hl-close-short-sol` entry shows 4 rows from partial fills that share one hash, totaling 31.34 SOL across four separate `sell` rows.
+Example from real-wallet audit cases in `docs/known-transactions.md`: the `hl-close-short-sol` entry is still the multi-row exemplar. Current implementation emits four separate `perp_close` rows for that case; the checked-in filtered case snapshot predates the perp-decision wave and still needs refresh.

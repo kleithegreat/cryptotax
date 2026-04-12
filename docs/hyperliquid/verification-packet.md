@@ -16,7 +16,7 @@ For each case below, the human reviewer should:
 | --- | --- |
 | evidence linkage | The normalized row cannot be reliably traced back to the Hyperliquid source event that produced it. |
 | final output semantics | The system preserves the event but has no decided tax-output representation. |
-| perp interpretation | Perpetual activity is approximated as spot-like buy/sell and routed through spot lot accounting. |
+| perp interpretation | Perpetual activity now uses dedicated `perp_open` / `perp_close` rows, but the current boundary still needs human verification before support claims rely on it. |
 | multiple | More than one of the above applies. |
 
 ---
@@ -34,15 +34,15 @@ For each case below, the human reviewer should:
 
 1. Retain and review the Hyperliquid source row showing `delta.usdc -0.168095` for `2025-10-07T00:00:00Z`. Does the source data confirm the amount, timestamp, and market?
 2. The normalized row loses which Hyperliquid market produced this funding payment (see the divergence note in `docs/hyperliquid/ARCHITECTURE.md` and the `Funding rows lose market context and still have weak evidence linkage` review item in `docs/hyperliquid/REVIEW.md`). Is the current USDC-only representation acceptable for evidence purposes, or must market context be retained before this case can be verified?
-3. Decide how this ordinary negative funding expense should appear in final tax output (see the `Negative funding is preserved, but final output semantics are still undecided` review item in `docs/hyperliquid/REVIEW.md` and the `Negative funding_payment is preserved but has no decided accounting or output semantics` review item in `docs/core/REVIEW.md`).
+3. The repo now emits this ordinary negative funding expense in a separate `funding_expenses.csv` report without USDC lot consumption. Is that informational boundary acceptable once evidence is verified, or is more source/context needed first? (See `docs/hyperliquid/REVIEW.md` and `docs/core/REVIEW.md`.)
 
 ### Blocker category
 
-**Multiple** — evidence linkage (market context dropped, source row not yet retained) and final output semantics (no decided expense treatment).
+**Multiple** — evidence linkage (market context dropped, source row not yet retained) and final-output support boundary (separate report implemented, but not yet human-verified).
 
 ### Support-boundary upgrade this case could unlock
 
-Resolving evidence linkage contributes to unblocking `hyperliquid.funding_evidence_and_expense_semantics_upgrade` in `docs/repo/TASK_DAG.md`. Resolving final output semantics additionally contributes to unblocking `decision.hyperliquid_negative_funding_output`, which chains into `core.accounting_support_upgrade`.
+Resolving evidence linkage and confirming the current separate-report boundary contributes to unblocking `hyperliquid.funding_evidence_and_expense_semantics_upgrade`, which then feeds into downstream support-boundary cleanup under `core.accounting_support_upgrade`.
 
 ---
 
@@ -76,22 +76,22 @@ Resolving evidence linkage for positive funding contributes to unblocking `hyper
 - **Label:** `hl-open-long-btc`
 - **Source system:** Hyperliquid fill history
 - **Known-transactions entry:** `hl-open-long-btc`
-- **Current normalized description:** 1 row; `buy` BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466
+- **Current normalized description:** The checked-in filtered case predates the perp-decision wave and is stale. Current implementation should emit 1 row; `perp_open` BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466.
 - **Filtered case file:** `audit/cases/hl-open-long-btc.json`
 
 ### Unresolved question for the human
 
 1. Confirm fill `0x296c458688c54a1e2ae6042cfc24eb02026d006c23c868f0cd34f0d947c92408` from Hyperliquid. Was this an opening perpetual position increase, or could it have been a spot acquisition?
-2. The current normalization maps `OPEN LONG` to a spot-like `buy` row that enters FIFO lot accounting (see `docs/hyperliquid/ARCHITECTURE.md` and the `Perp fills cross the IR as spot-like rows at API-fill granularity` review item in `docs/hyperliquid/REVIEW.md`). Is the current spot-like approximation acceptable as an explicitly current-behavior-only checkpoint, or should it be flagged as semantically misleading before any downstream tax claim touches it?
-3. If a dedicated perp model is adopted in the future (see `decision.hyperliquid_perp_model_boundary` in `docs/repo/TASK_DAG.md`), how should this row be reinterpreted — as a position-size increase with no immediate tax event, or as something else?
+2. The current normalization maps `OPEN LONG` to `perp_open`, quarantined from spot FIFO with no lot creation (see `docs/hyperliquid/ARCHITECTURE.md`). Is that no-lot boundary acceptable until a fuller position model exists?
+3. If a fuller perp model is adopted later, should this remain a pure position-size increase with no immediate tax event, or should additional evidence/context be carried downstream?
 
 ### Blocker category
 
-**Perp interpretation** — this perpetual position opening is currently approximated as a spot `buy` and routed through spot inventory semantics.
+**Perp interpretation** — this perpetual position opening is no longer routed through spot inventory semantics, but the no-lot boundary still needs human verification.
 
 ### Support-boundary upgrade this case could unlock
 
-Verifying the source event and confirming the current approximation boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`, which is also blocked by `decision.hyperliquid_perp_model_boundary`. Together these chain into `core.accounting_support_upgrade`.
+Verifying the source event and confirming the current no-lot boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`, which then feeds into downstream support-boundary cleanup under `core.accounting_support_upgrade`.
 
 ---
 
@@ -100,23 +100,23 @@ Verifying the source event and confirming the current approximation boundary con
 - **Label:** `hl-close-short-sol`
 - **Source system:** Hyperliquid fill history
 - **Known-transactions entry:** `hl-close-short-sol`
-- **Current normalized description:** 4 rows; `sell` SOL totals 31.34 units across four partial fills with per-row USDC fees
+- **Current normalized description:** The checked-in filtered case predates the perp-decision wave and is stale. Current implementation should emit 4 rows; `perp_close` SOL totals 31.34 units across four partial fills with per-row USDC fees plus exchange `closed_pnl` on each row.
 - **Filtered case file:** `audit/cases/hl-close-short-sol.json`
 
 ### Unresolved question for the human
 
 1. Confirm fill `0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e` from Hyperliquid. Do all four rows belong to one economic short-close event?
 2. Confirm fee conservation: do the per-row USDC fees sum to the total fee for this close event as shown in the Hyperliquid source data?
-3. The current normalization maps `CLOSE SHORT` to spot-like `sell` rows at API-fill granularity with no later consolidation step (see the known-approximations section in `docs/hyperliquid/ARCHITECTURE.md` and the `Perp fills cross the IR as spot-like rows at API-fill granularity` review item in `docs/hyperliquid/REVIEW.md`). Is the four-row spot-sell approximation acceptable as a current-behavior-only checkpoint, or is the row explosion itself a verification blocker?
-4. If a dedicated perp model is adopted, should this become a single position-close event with realized PnL, or should the partial-fill granularity be preserved?
+3. The current normalization maps `CLOSE SHORT` to `perp_close` rows at API-fill granularity, using exchange `closed_pnl` in a separate `perp_pnl.csv` report with no later consolidation step (see `docs/hyperliquid/ARCHITECTURE.md` and `docs/hyperliquid/REVIEW.md`). Is the four-row partial-fill output acceptable as a current-behavior-only checkpoint, or is the row explosion itself a verification blocker?
+4. Should this remain four separate per-fill realized-PnL entries, or should partial fills be consolidated before later reporting?
 
 ### Blocker category
 
-**Multiple** — perp interpretation (spot-like `sell` approximation for a short close) and evidence linkage (four partial fills that may represent one economic event, with no consolidation or grouping).
+**Multiple** — perp interpretation (per-fill `perp_close` rows using exchange `closed_pnl`) and evidence linkage (four partial fills that may represent one economic event, with no consolidation or grouping).
 
 ### Support-boundary upgrade this case could unlock
 
-Verifying the source event and confirming the current approximation boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`. The fill-grouping question also feeds into the broader IR contract discussion at `decision.ir_contract_refinement`. Together these chain into `core.accounting_support_upgrade`.
+Verifying the source event and confirming the current partial-fill boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`. The fill-grouping question also feeds into the broader IR contract discussion at `decision.ir_contract_refinement`. Together these chain into downstream support-boundary cleanup under `core.accounting_support_upgrade`.
 
 ---
 
@@ -124,10 +124,10 @@ Verifying the source event and confirming the current approximation boundary con
 
 | Case | Blocker category | Primary DAG node unblocked | Needs human decision node? |
 | --- | --- | --- | --- |
-| `hl-funding-negative-2025-10-07` | multiple (evidence linkage + final output semantics) | `hyperliquid.funding_evidence_and_expense_semantics_upgrade` | Yes: `decision.hyperliquid_negative_funding_output` |
+| `hl-funding-negative-2025-10-07` | multiple (evidence linkage + final-output support boundary) | `hyperliquid.funding_evidence_and_expense_semantics_upgrade` | No: decision resolved; human verification still pending |
 | `hl-funding-positive-2025-12-02` | evidence linkage | `hyperliquid.funding_evidence_and_expense_semantics_upgrade` | No (income path already exists) |
-| `hl-open-long-btc` | perp interpretation | `hyperliquid.perp_semantics_upgrade` | Yes: `decision.hyperliquid_perp_model_boundary` |
-| `hl-close-short-sol` | multiple (perp interpretation + evidence linkage) | `hyperliquid.perp_semantics_upgrade` | Yes: `decision.hyperliquid_perp_model_boundary` |
+| `hl-open-long-btc` | perp interpretation | `hyperliquid.perp_semantics_upgrade` | No: decision resolved; human verification still pending |
+| `hl-close-short-sol` | multiple (perp interpretation + evidence linkage) | `hyperliquid.perp_semantics_upgrade` | No: decision resolved; human verification still pending |
 
 ## Shared open questions across all cases
 
@@ -146,6 +146,6 @@ All content above is derived from:
 - `docs/hyperliquid/ARCHITECTURE.md`
 - `docs/hyperliquid/REVIEW.md`
 - the `Negative funding_payment is preserved but has no decided accounting or output semantics` review item in `docs/core/REVIEW.md`
-- `docs/repo/TASK_DAG.md` nodes: `verification.expand_human_verified_exemplars`, `decision.hyperliquid_negative_funding_output`, `decision.hyperliquid_perp_model_boundary`, `hyperliquid.funding_evidence_and_expense_semantics_upgrade`, `hyperliquid.perp_semantics_upgrade`, `core.accounting_support_upgrade`
+- `docs/repo/TASK_DAG.md` nodes: `verification.expand_human_verified_exemplars`, `hyperliquid.funding_evidence_and_expense_semantics_upgrade`, `hyperliquid.perp_semantics_upgrade`, `core.accounting_support_upgrade`
 - `docs/audit/SPEC.md` human-verification boundary
 - `docs/audit-workflow.md`

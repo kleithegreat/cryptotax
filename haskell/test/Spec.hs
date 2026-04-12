@@ -228,15 +228,15 @@ prop_swapDecomposition = forAll genSwapData $ \(sentAmt, sentPx, rcvAmt, rcvPx) 
       buyTx = Transaction
         { txId = "buy1", txTimestamp = t1, txSource = "test", txChain = "test"
         , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
-        , txReceived = Just (AssetAmount "ETH" (showI sentAmt) (showI (sentAmt * sentPx)))
-        , txFee = Nothing, txRawType = Nothing
+        , txReceived = Just (AssetAmount "ETH" Nothing (showI sentAmt) (showI (sentAmt * sentPx)))
+        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
         }
       swapTx = Transaction
         { txId = "swap1", txTimestamp = t2, txSource = "test", txChain = "test"
         , txType = Swap, txWallet = "w1", txCounterparty = Nothing
-        , txSent = Just (AssetAmount "ETH" (showI sentAmt) (showI (sentAmt * sentPx)))
-        , txReceived = Just (AssetAmount "SOL" (showI rcvAmt) (showI (rcvAmt * rcvPx)))
-        , txFee = Nothing, txRawType = Nothing
+        , txSent = Just (AssetAmount "ETH" Nothing (showI sentAmt) (showI (sentAmt * sentPx)))
+        , txReceived = Just (AssetAmount "SOL" Nothing (showI rcvAmt) (showI (rcvAmt * rcvPx)))
+        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [buyTx, swapTx]
   in conjoin
@@ -266,26 +266,32 @@ prop_jsonRoundtrip = forAll genTxPayload $ \payload ->
     genTransaction = do
       txId' <- T.pack . ("tx" ++) . show <$> (choose (1, 10000) :: Gen Int)
       ts <- genTime
-      txType' <- elements [Buy, Sell, Swap, TransferIn, TransferOut, Income, FundingPayment]
+      txType' <- elements [Buy, Sell, Swap, TransferIn, TransferOut, Income, FundingPayment, PerpOpen, PerpClose]
       sent <- case txType' of
-        Sell -> Just <$> genAssetAmount
-        Swap -> Just <$> genAssetAmount
+        Sell      -> Just <$> genAssetAmount
+        Swap      -> Just <$> genAssetAmount
         TransferOut -> Just <$> genAssetAmount
+        PerpClose -> Just <$> genAssetAmount
         _ -> pure Nothing
       rcv <- case txType' of
-        Buy    -> Just <$> genAssetAmount
-        Swap   -> Just <$> genAssetAmount
-        Income -> Just <$> genAssetAmount
+        Buy            -> Just <$> genAssetAmount
+        Swap           -> Just <$> genAssetAmount
+        Income         -> Just <$> genAssetAmount
         FundingPayment -> Just <$> genAssetAmount
-        TransferIn -> Just <$> genAssetAmount
+        TransferIn     -> Just <$> genAssetAmount
+        PerpOpen       -> Just <$> genAssetAmount
         _ -> pure Nothing
-      pure $ Transaction txId' ts "test" "ethereum" txType' "0xabc" Nothing sent rcv Nothing Nothing
+      closedPnl <- case txType' of
+        PerpClose -> Just . T.pack . show <$> (choose (-5000, 5000) :: Gen Integer)
+        _         -> pure Nothing
+      pure $ Transaction txId' ts "test" "ethereum" txType' "0xabc" Nothing sent rcv Nothing Nothing closedPnl
 
     genAssetAmount = do
       asset <- elements ["ETH", "BTC", "SOL", "USDC"]
+      canonical <- elements [Nothing, Just "mint123"]
       amt <- show <$> (choose (1, 99999) :: Gen Integer)
       usd <- show <$> (choose (1, 99999) :: Gen Integer)
-      pure $ AssetAmount (T.pack asset) (T.pack amt) (T.pack usd)
+      pure $ AssetAmount (T.pack asset) canonical (T.pack amt) (T.pack usd)
 
 -- ---------------------------------------------------------------------------
 -- 12. Out-of-order timestamps are handled (sorted internally)
@@ -298,14 +304,14 @@ prop_outOfOrderHandled = forAll genAmtPx $ \(amt, px) ->
       buyTx = Transaction
         { txId = "buy1", txTimestamp = t1, txSource = "test", txChain = "test"
         , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
-        , txReceived = Just (AssetAmount "ETH" (showI amt) (showI (amt * px)))
-        , txFee = Nothing, txRawType = Nothing
+        , txReceived = Just (AssetAmount "ETH" Nothing (showI amt) (showI (amt * px)))
+        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
         }
       sellTx = Transaction
         { txId = "sell1", txTimestamp = t2, txSource = "test", txChain = "test"
         , txType = Sell, txWallet = "w1", txCounterparty = Nothing
-        , txSent = Just (AssetAmount "ETH" (showI amt) (showI (amt * px)))
-        , txReceived = Nothing, txFee = Nothing, txRawType = Nothing
+        , txSent = Just (AssetAmount "ETH" Nothing (showI amt) (showI (amt * px)))
+        , txReceived = Nothing, txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
         }
       -- Reverse order: sell before buy
       result = processTransactions [sellTx, buyTx]
@@ -391,8 +397,8 @@ prop_positiveFundingCreatesIncomeAndLot = once $
         { txId = "funding-positive", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
         , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
         , txSent = Nothing
-        , txReceived = Just (AssetAmount "USDC" "1.879512" "1.879512")
-        , txFee = Nothing, txRawType = Just "funding"
+        , txReceived = Just (AssetAmount "USDC" Nothing "1.879512" "1.879512")
+        , txFee = Nothing, txRawType = Just "funding", txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in conjoin
@@ -403,29 +409,168 @@ prop_positiveFundingCreatesIncomeAndLot = once $
        ]
 
 -- ---------------------------------------------------------------------------
--- 17. Negative funding is preserved but surfaced as unsupported
+-- 17. Negative funding produces a structured FundingExpense (not an error)
 -- ---------------------------------------------------------------------------
 
-prop_negativeFundingIsExplicitlyUnsupported :: Property
-prop_negativeFundingIsExplicitlyUnsupported = once $
+prop_negativeFundingCreatesStructuredExpense :: Property
+prop_negativeFundingCreatesStructuredExpense = once $
   let t = UTCTime (fromGregorian 2025 10 7) 0
       tx = Transaction
         { txId = "funding-negative", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
         , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
-        , txSent = Just (AssetAmount "USDC" "0.168095" "0.168095")
+        , txSent = Just (AssetAmount "USDC" Nothing "0.168095" "0.168095")
         , txReceived = Nothing
-        , txFee = Nothing, txRawType = Just "funding"
+        , txFee = Nothing, txRawType = Just "funding", txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in conjoin
-       [ property (null (prIncome result))
+       [ property (null (prErrors result))
+       , property (null (prIncome result))
        , Lot.totalUnits "USDC" (prFinalQueue result) === 0
-       , prErrors result ===
-           [ "Unsupported negative funding_payment expense for tx funding-negative: sent 0.168095 USDC; ordinary expense output and inventory adjustment are not implemented yet" ]
+       , property (length (prFundingExpenses result) == 1)
+       , feUSDValue (head (prFundingExpenses result)) === USD (168095 % 1000000)
+       , feAsset (head (prFundingExpenses result)) === "USDC"
        ]
 
 -- ---------------------------------------------------------------------------
--- 18. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
+-- 18. Perp open does not create lots (quarantined from spot FIFO)
+-- ---------------------------------------------------------------------------
+
+prop_perpOpenDoesNotCreateLots :: Property
+prop_perpOpenDoesNotCreateLots = once $
+  let t = UTCTime (fromGregorian 2025 1 15) 0
+      tx = Transaction
+        { txId = "perp-open-1", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = PerpOpen, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Nothing
+        , txReceived = Just (AssetAmount "BTC" Nothing "0.0004" "49.93")
+        , txFee = Nothing, txRawType = Just "Open Long", txClosedPnl = Nothing
+        }
+      result = processTransactions [tx]
+  in conjoin
+       [ property (null (prErrors result))
+       , property (null (prGainLosses result))
+       , property (null (prPerpPnl result))
+       , Lot.totalUnits "BTC" (prFinalQueue result) === 0
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 19. Perp close uses ClosedPnl for realized PnL output
+-- ---------------------------------------------------------------------------
+
+prop_perpCloseUsesClosedPnl :: Property
+prop_perpCloseUsesClosedPnl = once $
+  let t = UTCTime (fromGregorian 2025 2 1) 0
+      tx = Transaction
+        { txId = "perp-close-1", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Just (AssetAmount "SOL" Nothing "10.5" "2100.00")
+        , txReceived = Nothing
+        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Just "42.50"
+        }
+      result = processTransactions [tx]
+  in conjoin
+       [ property (null (prErrors result))
+       , property (null (prGainLosses result))
+       , property (length (prPerpPnl result) == 1)
+       , ppClosedPnl (head (prPerpPnl result)) === USD (85 % 2)
+       , ppAsset (head (prPerpPnl result)) === "SOL"
+       , ppDirection (head (prPerpPnl result)) === "Close Long"
+       -- Perp close does NOT consume spot lots
+       , Lot.totalUnits "SOL" (prFinalQueue result) === 0
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 20. Perp close without ClosedPnl surfaces error
+-- ---------------------------------------------------------------------------
+
+prop_perpCloseWithoutPnlIsError :: Property
+prop_perpCloseWithoutPnlIsError = once $
+  let t = UTCTime (fromGregorian 2025 2 1) 0
+      tx = Transaction
+        { txId = "perp-close-no-pnl", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Just (AssetAmount "SOL" Nothing "10.5" "2100.00")
+        , txReceived = Nothing
+        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Nothing
+        }
+      result = processTransactions [tx]
+  in conjoin
+       [ property (length (prErrors result) == 1)
+       , property (null (prPerpPnl result))
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 21. Perp close without sent asset surfaces error
+-- ---------------------------------------------------------------------------
+
+prop_perpCloseWithoutSentIsError :: Property
+prop_perpCloseWithoutSentIsError = once $
+  let t = UTCTime (fromGregorian 2025 2 1) 0
+      tx = Transaction
+        { txId = "perp-close-no-sent", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Nothing, txReceived = Nothing
+        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Just "42.50"
+        }
+      result = processTransactions [tx]
+  in conjoin
+       [ property (length (prErrors result) == 1)
+       , property (null (prPerpPnl result))
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 22. Perp fills do not contaminate spot FIFO queues
+-- ---------------------------------------------------------------------------
+
+prop_perpDoesNotContaminateSpotFIFO :: Property
+prop_perpDoesNotContaminateSpotFIFO = once $
+  let t1 = UTCTime (fromGregorian 2025 1 1) 0
+      t2 = UTCTime (fromGregorian 2025 1 15) 0
+      t3 = UTCTime (fromGregorian 2025 2 1) 0
+      t4 = UTCTime (fromGregorian 2025 3 1) 0
+      -- Spot buy: acquire 1 BTC at $40000
+      spotBuy = Transaction
+        { txId = "spot-buy", txTimestamp = t1, txSource = "robinhood", txChain = "robinhood"
+        , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
+        , txReceived = Just (AssetAmount "BTC" Nothing "1" "40000")
+        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        }
+      -- Perp open: should NOT create a phantom BTC lot
+      perpOpen = Transaction
+        { txId = "perp-open", txTimestamp = t2, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = PerpOpen, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
+        , txReceived = Just (AssetAmount "BTC" Nothing "5" "250000")
+        , txFee = Nothing, txRawType = Just "Open Long", txClosedPnl = Nothing
+        }
+      -- Perp close: should NOT consume the spot BTC lot
+      perpClose = Transaction
+        { txId = "perp-close", txTimestamp = t3, txSource = "hyperliquid", txChain = "hyperliquid"
+        , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Just (AssetAmount "BTC" Nothing "5" "260000")
+        , txReceived = Nothing
+        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Just "10000"
+        }
+      -- Spot sell: should find the original spot lot intact
+      spotSell = Transaction
+        { txId = "spot-sell", txTimestamp = t4, txSource = "robinhood", txChain = "robinhood"
+        , txType = Sell, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Just (AssetAmount "BTC" Nothing "1" "50000")
+        , txReceived = Nothing
+        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        }
+      result = processTransactions [spotBuy, perpOpen, perpClose, spotSell]
+  in conjoin
+       [ -- Spot sell should succeed (lot still exists)
+         property (null (prErrors result))
+       , property (length (prGainLosses result) == 1)
+       , glGain (head (prGainLosses result)) === USD 10000
+       , property (length (prPerpPnl result) == 1)
+       , ppClosedPnl (head (prPerpPnl result)) === USD 10000
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 23. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
 -- ---------------------------------------------------------------------------
 
 golden_basicBuySellTransfer :: IO ()
@@ -488,9 +633,14 @@ main = do
   check "14. dust precision"             prop_dustPrecision
   check "15. zero-value safety"          prop_zeroValueSafe
   check "16. positive funding income"    prop_positiveFundingCreatesIncomeAndLot
-  check "17. negative funding explicit"  prop_negativeFundingIsExplicitlyUnsupported
+  check "17. negative funding expense"   prop_negativeFundingCreatesStructuredExpense
+  check "18. perp open no lots"          prop_perpOpenDoesNotCreateLots
+  check "19. perp close ClosedPnl"       prop_perpCloseUsesClosedPnl
+  check "20. perp close without pnl"     prop_perpCloseWithoutPnlIsError
+  check "21. perp close requires sent"   prop_perpCloseWithoutSentIsError
+  check "22. perp/spot isolation"        prop_perpDoesNotContaminateSpotFIFO
 
-  putStr "  18. golden buy/sell/transfer: "
+  putStr "  23. golden buy/sell/transfer: "
   golden_basicBuySellTransfer
   putStrLn "OK"
 

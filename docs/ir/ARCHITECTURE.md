@@ -50,8 +50,8 @@ Important named constructs:
 ## Outputs / side effects
 
 - The top-level JSON object has `version`, `wallets`, and `transactions`.
-- Each normalized `Transaction` currently carries `id`, `timestamp`, `source`, `chain`, `tx_type`, `wallet`, `counterparty`, `sent`, `received`, `fee`, and `raw_type`.
-- Each `AssetAmount` currently carries one `asset` string, one decimal `amount` string, and one decimal `usd_value` string.
+- Each normalized `Transaction` currently carries `id`, `timestamp`, `source`, `chain`, `tx_type`, `wallet`, `counterparty`, `sent`, `received`, `fee`, `raw_type`, and optionally `closed_pnl` (for perp closes).
+- Each `AssetAmount` carries `asset` (display string), optional `asset_canonical` (canonical identity when it differs from display), `amount`, and `usd_value`.
 - `NormalizeWithDiagnostics` returns a `NormalizeResult` containing both the normalized `Transactions` and structured `[]SkippedRow` diagnostics (tx ID, source, chain, raw type, reason). `Normalize` wraps it and prints skipped-row warnings to stderr for backward compatibility.
 - `buildPayload` calls `NormalizeWithDiagnostics` and returns `[]SkippedRow` alongside the payload. It also logs skipped rows to its stderr writer for backward-compatible console output.
 - `WriteCaptureArtifacts` persists skipped rows as a `.skipped.json` sidecar file alongside the normalized payload when any rows were skipped during normalization. The sidecar is a JSON array of `SkippedRow` objects.
@@ -74,11 +74,11 @@ Important named constructs:
 
 - Unknown valuations still reach the IR as `usd_value: "0"`.
 - Address-like and mint-like asset strings remain in the payload instead of being rewritten.
-- Hyperliquid perp fills still enter the IR through spot-like `buy` and `sell` rows so the approximation stays visible.
+- Hyperliquid perp fills now enter the IR as `perp_open` and `perp_close` rows, quarantined from spot `buy`/`sell`. Perp closes carry `closed_pnl` from the exchange API.
 
 ## Current known approximations or conservative behavior
 
-- The schema has one `asset` string per leg. It cannot carry canonical identity and display identity separately.
+- The `asset` field still has mixed semantics (symbol for some chains, mint for others). `asset_canonical` provides canonical identity when it differs from display, but downstream consumers have not yet adopted it.
 - `resolveUSDPrice` returns `"0"` when pricing is unavailable or the asset is outside `price.coingeckoIDs` in `go/price/coingecko.go`.
 - EVM rows currently use the source token symbol that `go/fetcher/etherscan.go` receives from Etherscan. Contract-address identity is not present in the normalized row.
 - Solana rows currently use a source-backed symbol when Helius provides one, and otherwise fall back to the mint string.

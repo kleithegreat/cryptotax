@@ -51,14 +51,22 @@ The row format itself does not currently encode that tier directly, so the relev
 - If a transaction cannot yet be modeled fully, the repository should still emit a conservative representation when possible.
 - Unsupported handling must not silently drop economically meaningful legs.
 
-## Known current limitation
+## Asset identity contract
 
-The normalized schema currently has one `asset` string per leg, so it does not fully encode canonical asset identity separately from display symbol/label. Where upstream code preserves that distinction more faithfully than the normalized schema can express, that limitation should be documented explicitly.
+`AssetAmount` now carries an optional `asset_canonical` field alongside the existing `asset` display field. When canonical identity differs from display identity (e.g. a Solana mint vs a source-backed symbol like "USDC"), the normalizer populates `asset_canonical` with the canonical identifier. Old payloads without this field parse as `Nothing` (backward compatible).
+
+Each downstream consumer can opt into canonical identity at its own pace. The `asset` field retains its current mixed-semantics role (symbol for some chains, mint for others) to avoid breaking existing output.
+
+## Perp transaction types
+
+The IR now supports `perp_open` and `perp_close` transaction types for Hyperliquid perpetual fills. These are distinct from spot `buy`/`sell` to prevent perp positions from contaminating spot FIFO accounting.
+
+`perp_close` rows carry an optional `closed_pnl` field containing the exchange-reported realized PnL. This field is populated from the Hyperliquid API's `ClosedPnl` value during normalization.
 
 ## Near-term design priority
 
 The repository should continue clarifying the IR around:
 
-- canonical vs display asset identity
+- incremental consumer adoption of `asset_canonical` for lot tracking, transfer matching, and audit accumulation
 - support boundaries for multi-leg events
 - when a split-row representation is intentional vs merely current behavior

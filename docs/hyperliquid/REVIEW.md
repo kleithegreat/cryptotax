@@ -16,27 +16,32 @@ This document tracks grounded gaps between `docs/hyperliquid/SPEC.md` and the cu
 - What blocks resolution: `types.Transaction` has no dedicated market-context or secondary-source-identifier field, so preserving that context would change the IR contract.
 - Smallest good next checkpoint: decide what minimum market and evidence context a funding row must retain before implementation work starts.
 
-### Negative funding is preserved, but final output semantics are still undecided
+### Negative funding is now a structured expense; inventory effect is not applied
 
-- Status: `needs_human_decision`
-- Issue type: `human-decision blocker`
-- Why this is a spec/implementation gap: `docs/hyperliquid/SPEC.md` says negative funding must stay visible and explicitly calls out final tax-output semantics for negative funding as unresolved. The current pipeline preserves the event but still cannot say how it should appear in final output.
-- Current implementation evidence: `normalizeHyperliquid` in `go/normalize/normalize.go` turns negative funding into outbound USDC on `funding_payment`. `handleFunding` in `haskell/src/GainLoss.hs` then turns that row into an unsupported expense warning in `prErrors`. `Main.main` in `haskell/app/Main.hs` writes only the 8949-style CSV file, so the negative funding row does not become durable final output.
-- Desired direction implied by the spec: keep negative funding explicit without reinterpreting it as spot inventory activity, and decide whether and how ordinary expense handling should appear downstream.
-- What blocks resolution: the ordinary-expense posture is a tax and output decision that needs human approval, and the current funding exemplars still require human verification.
-- Smallest good next checkpoint: decide one explicit supported or unsupported final-output posture for negative funding so implementation can stay inside a documented boundary.
+- Status: `done`
+- Issue type: resolved
+- Resolution: Decision Option C adopted — negative funding creates structured `FundingExpense` entries in `prFundingExpenses`, written to `funding_expenses.csv`. The expense does not consume USDC lots (Option D was not chosen). `prop_negativeFundingCreatesStructuredExpense` in `haskell/test/Spec.hs` freezes the new behavior.
 
-### Perp fills cross the IR as spot-like rows at API-fill granularity
+### Perp fills are quarantined from spot FIFO; ClosedPnl used for PnL output
 
-- Status: `needs_human_decision`
-- Issue type: `support-boundary gap`, `human-decision blocker`
-- Why this is a spec/implementation gap: `docs/hyperliquid/SPEC.md` says agents must not present perp activity as fully solved spot semantics when that is not actually true. The current implementation still routes perp fills through spot-like transaction types and spot lot accounting.
-- Current implementation evidence: `fetchFills` in `go/fetcher/hyperliquid.go` emits one `RawTransaction` per `hlFill`. `normalizeHyperliquid` in `go/normalize/normalize.go` maps `OPEN LONG` and `OPEN SHORT` to `TxBuy`, `CLOSE LONG` and `CLOSE SHORT` to `TxSell`, and all other directions to `TxSwap`. `handleBuy`, `handleSell`, and `handleSwap` in `haskell/src/GainLoss.hs` then apply spot inventory logic. `docs/known-transactions.md` records `hl-open-long-btc` and `hl-close-short-sol` as pending review targets.
-- Desired direction implied by the spec: either keep perp fills explicitly current-behavior-only with durable surfacing, or adopt a distinct perp position and PnL model instead of routing them through spot inventory semantics.
-- What blocks resolution: the repo still needs a human decision on the future perp model boundary, and the documented real-wallet fill exemplars still need human verification.
-- Smallest good next checkpoint: decide whether future Hyperliquid support will keep an explicit current-behavior-only spot-like representation or move toward a dedicated perp model.
+- Status: `done`
+- Issue type: resolved
+- Resolution: Decision Option C (API-PnL model) adopted — perp fills now use `perp_open` / `perp_close` tx types instead of spot `buy` / `sell`. `ClosedPnl` is propagated from the fetcher through normalization; `StartPosition` is retained only on the raw fetcher row for possible future use. The Haskell core emits `PerpPnlEntry` records using exchange-reported `ClosedPnl` in `perp_pnl.csv`. Perp opens are no-ops (no phantom lots). Perp closes do not consume spot FIFO lots. Tests `prop_perpOpenDoesNotCreateLots`, `prop_perpCloseUsesClosedPnl`, `prop_perpCloseWithoutPnlIsError`, `prop_perpCloseWithoutSentIsError`, and `prop_perpDoesNotContaminateSpotFIFO` freeze the quarantine and PnL behavior.
+
+### Perp PnL 8949 representation is unresolved
+
+- Status: `open`
+- Issue type: `support-boundary gap`
+- Why this is a gap: The perp PnL report uses exchange-reported `ClosedPnl` as realized PnL. The cost-basis and proceeds representation for derivative PnL on Form 8949 is unresolved (notional entry/exit? net settlement?). The separate `perp_pnl.csv` is intentionally not 8949-formatted.
+- What blocks resolution: this is a tax-interpretation question requiring human decision or professional guidance.
+
+### Partial-fill ClosedPnl is not consolidated
+
+- Status: `open`
+- Issue type: `support-boundary gap`
+- Why this is a gap: each API fill gets its own `PerpPnlEntry`. Multiple fills sharing one economic position change (e.g., `hl-close-short-sol` with 4 partial fills) produce 4 separate PnL rows instead of one consolidated entry.
+- Smallest good next checkpoint: decide whether fills sharing a hash or timestamp should be consolidated into one PnL entry.
 
 ## Non-goals / intentionally narrow boundaries
 
-- This review doc does not ask the repository to invent realized PnL from partial Hyperliquid data.
 - Spot `@N` asset resolution through `fetchSpotMeta` is not itself under review here.
