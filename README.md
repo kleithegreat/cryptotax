@@ -29,9 +29,9 @@ and Hyperliquid perps still needs explicit review.
 │  Haskell binary (financial core)                 │
 │                                                  │
 │  Types (Rational arithmetic, no floats)          │
-│  → FIFO Lot Tracker                             │
-│  → Gain/Loss Engine                             │
-│  → Form 8949 CSV Report                         │
+│  → FIFO Lot Tracker                              │
+│  → Gain/Loss Engine                              │
+│  → Form 8949 CSV Report                          │
 │                                                  │
 │  QuickCheck property tests on all invariants     │
 └──────────────────────────────────────────────────┘
