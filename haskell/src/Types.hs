@@ -17,6 +17,7 @@ module Types
   , AssetSymbol(..)
   , TokenAmount(..)
   , USD(..)
+  , IncomeEntry(..)
   , FundingExpense(..)
   , PerpPnlEntry(..)
   , parseDecimal
@@ -163,6 +164,9 @@ data Transaction = Transaction
   , txReceived     :: Maybe AssetAmount
   , txFee          :: Maybe AssetAmount
   , txRawType      :: Maybe Text
+  , txMarket       :: Maybe Text  -- source-specific market context, when preserved
+  , txEventGroupId :: Maybe Text  -- stable key tying related rows to one source event
+  , txSplitReason  :: Maybe Text  -- why one source event is represented as many rows
   , txClosedPnl    :: Maybe Text  -- exchange-reported realized PnL (perp closes)
   } deriving (Show, Eq, Generic)
 
@@ -179,6 +183,9 @@ instance FromJSON Transaction where
                 <*> v .:? "received"
                 <*> v .:? "fee"
                 <*> v .:? "raw_type"
+                <*> v .:? "market"
+                <*> v .:? "event_group_id"
+                <*> v .:? "split_reason"
                 <*> v .:? "closed_pnl"
 
 instance ToJSON Transaction where
@@ -194,7 +201,11 @@ instance ToJSON Transaction where
     , "received"     .= txReceived tx
     , "fee"          .= txFee tx
     , "raw_type"     .= txRawType tx
-    ] ++ maybe [] (\p -> ["closed_pnl" .= p]) (txClosedPnl tx)
+    ]
+    ++ maybe [] (\m -> ["market" .= m]) (txMarket tx)
+    ++ maybe [] (\g -> ["event_group_id" .= g]) (txEventGroupId tx)
+    ++ maybe [] (\r -> ["split_reason" .= r]) (txSplitReason tx)
+    ++ maybe [] (\p -> ["closed_pnl" .= p]) (txClosedPnl tx)
 
 -- ---------------------------------------------------------------------------
 -- Financial core types (internal to the engine, not from JSON)
@@ -232,6 +243,15 @@ data HoldingPeriod = ShortTerm | LongTerm
 -- ---------------------------------------------------------------------------
 -- Supplemental output types — not 8949 disposals
 -- ---------------------------------------------------------------------------
+
+-- | A structured income receipt report row, kept separate from 8949 disposals.
+data IncomeEntry = IncomeEntry
+  { iiTimestamp :: UTCTime
+  , iiTxId      :: Text
+  , iiAsset     :: AssetSymbol
+  , iiAmount    :: TokenAmount
+  , iiUSDValue  :: USD
+  } deriving (Show, Eq)
 
 -- | A negative funding cash flow, kept separate from 8949 disposals and perp PnL.
 data FundingExpense = FundingExpense

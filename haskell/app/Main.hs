@@ -13,7 +13,7 @@ import           System.FilePath (takeDirectory, (</>))
 
 import           Types
 import           GainLoss  (processTransactions, ProcessResult(..))
-import           Report    (render8949CSV, renderFundingExpenseCSV, renderPerpPnlCSV)
+import           Report    (render8949CSV, renderIncomeCSV, renderFundingExpenseCSV, renderPerpPnlCSV)
 
 main :: IO ()
 main = do
@@ -49,8 +49,20 @@ main = do
       let totalGain = sum $ map (unUSD . glGain) (prGainLosses result)
       hPutStrLn stderr $ "Net gain/loss: $" ++ show (fromRational totalGain :: Double)
 
-      let incomeTotal = sum $ map (unUSD . glGain) (prIncome result)
+      let incomeEntries = prIncome result
+      let incomeTotal = sum $ map (unUSD . iiUSDValue) incomeEntries
       hPutStrLn stderr $ "Total income: $" ++ show (fromRational incomeTotal :: Double)
+
+      -- Supplemental: ordinary income report
+      if null incomeEntries
+        then pure ()
+        else do
+          let incomeFile = takeDirectory outputFile </> "income.csv"
+          TIO.writeFile incomeFile (renderIncomeCSV incomeEntries)
+          hPutStrLn stderr $ "Wrote "
+            ++ show (length incomeEntries)
+            ++ " income rows to "
+            ++ incomeFile
 
       -- Supplemental: funding expenses report
       let fundingExps = prFundingExpenses result

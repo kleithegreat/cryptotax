@@ -6,7 +6,7 @@ The Haskell core consumes normalized JSON from stdin, applies FIFO lot accountin
 
 ## Current ownership boundary
 
-- `haskell/src/Types.hs` owns the Haskell mirror of the JSON IR plus the internal `TaxLot`, `Disposal`, and `GainLoss` types.
+- `haskell/src/Types.hs` owns the Haskell mirror of the JSON IR plus the internal `TaxLot`, `Disposal`, `GainLoss`, and supplemental report row types.
 - `haskell/src/Lot.hs` owns FIFO lot queue updates.
 - `haskell/src/GainLoss.hs` owns transaction-by-transaction accounting over normalized rows.
 - `haskell/src/Report.hs` owns the current CSV renderer.
@@ -33,6 +33,7 @@ Important named constructs:
 - `processTransactions`
 - `ProcessResult`
 - `render8949CSV`
+- `renderIncomeCSV`
 
 ## Data flow
 
@@ -41,7 +42,7 @@ Important named constructs:
 - `handleBuy` reads `txReceived`, parses `aaAmount` and `aaUSDValue` with `parseDecimal`, adds `feeUSD`, and calls `Lot.acquire` to append a new FIFO lot.
 - `handleSell` builds a `Disposal` from `txSent` and `feeUSD`, then calls `Lot.dispose` to consume existing lots and emit `GainLoss` rows.
 - `handleSwap` also builds a `Disposal` from `txSent`, then acquires a new lot for `txReceived` after the disposal succeeds.
-- `handleIncome` routes inbound `income` rows to `recordIncomeReceipt`, which both creates a lot at fair market value and records an entry in `prIncome`.
+- `handleIncome` routes inbound `income` rows to `recordIncomeReceipt`, which both creates a lot at fair market value and records an `IncomeEntry` in `prIncome`.
 - `handleFunding` treats positive `funding_payment` rows as income receipts and negative `funding_payment` rows as structured `FundingExpense` entries in `prFundingExpenses`.
 - `handlePerpOpen` is a no-op — perp opens do not create phantom lots.
 - `handlePerpClose` uses `txClosedPnl` to emit a `PerpPnlEntry` in `prPerpPnl`. If `closed_pnl` is absent, an error is recorded.
@@ -51,6 +52,7 @@ Important named constructs:
 ## Outputs / side effects
 
 - `Main.main` writes the 8949 CSV file selected by `--output`.
+- `Main.main` writes `income.csv` alongside the 8949 output when income entries exist.
 - `Main.main` writes `funding_expenses.csv` alongside the 8949 output when funding expenses exist.
 - `Main.main` writes `perp_pnl.csv` alongside the 8949 output when perp PnL entries exist.
 - `Main.main` writes warning lines for every entry in `prErrors`.
@@ -68,7 +70,7 @@ Important named constructs:
 ### Current-behavior-only checkpoints
 
 - `haskell/test/Spec.hs` freezes the current accounting behavior with QuickCheck properties and the golden fixture.
-- The positive and negative funding properties in `haskell/test/Spec.hs` freeze current Hyperliquid funding handling, but they do not upgrade negative funding expense semantics to supported output.
+- The funding and perp properties in `haskell/test/Spec.hs` freeze the current supplemental-report handling for Hyperliquid rows.
 
 ### Unsupported but surfaced behavior
 
@@ -79,11 +81,10 @@ Important named constructs:
 ## Current known approximations or conservative behavior
 
 - `Swap` is treated as one disposal plus one acquisition using the upstream USD legs already present in the IR.
-- `recordIncomeReceipt` captures income economically, but `render8949CSV` does not emit a separate income report. Income is only accumulated in `prIncome` and summarized to stderr.
+- `recordIncomeReceipt` captures income economically and now writes a separate `income.csv` supplemental report, but transfer-like rows still have no downstream structured output path.
 - Negative funding does not affect USDC inventory (no lot consumption). The structured expense report is informational.
 - `TransferIn` and `TransferOut` currently do not affect lots or final output.
 
 ## Notable current divergence from spec
 
 - `processTx` drops every `TransferIn` and `TransferOut` row without an error or explicit unsupported output. That means conservative upstream transfer-like rows do not remain visible once they reach the core. This is a concrete mismatch with the spec's surfacing requirement and is tracked in `docs/core/REVIEW.md`.
-- The perp PnL report uses the exchange-reported `ClosedPnl` as the realized PnL value. The 8949 representation (cost-basis and proceeds columns for derivatives) is unresolved and tracked in `docs/core/REVIEW.md`.

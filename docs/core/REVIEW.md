@@ -16,12 +16,11 @@ This document tracks grounded gaps between `docs/core/SPEC.md` and the current H
 - What blocks resolution: `ProcessResult` and `Report` currently have no transfer-oriented output channel.
 - Smallest good next checkpoint: add a stable result path that records transfer rows as intentionally non-taxable or unsupported downstream activity, even before broader accounting semantics change.
 
-### The core has supplemental output channels but income still lacks a structured report
+### The core now writes a structured income report
 
-- Status: `open`
-- Issue type: `schema/contract gap`
-- Why this is still a gap: The core now writes `funding_expenses.csv` and `perp_pnl.csv` as supplemental reports. But `prIncome` entries are still only summarized to stderr, not written to a structured file. A complete non-8949 output story would include structured income output.
-- What blocks resolution: income report format and support claims need a human decision.
+- Status: `done`
+- Issue type: resolved
+- Resolution: `recordIncomeReceipt` now records structured `IncomeEntry` rows in `prIncome`, and `haskell/app/Main.hs` writes them to `income.csv` through `renderIncomeCSV` in `haskell/src/Report.hs`. Income is no longer stderr-only.
 
 ### Negative `funding_payment` is now a structured expense but does not affect inventory
 
@@ -29,13 +28,11 @@ This document tracks grounded gaps between `docs/core/SPEC.md` and the current H
 - Issue type: resolved
 - Resolution: Decision Option C adopted — negative funding creates structured `FundingExpense` entries written to `funding_expenses.csv`. The expense does not consume USDC lots. `prop_negativeFundingCreatesStructuredExpense` in `haskell/test/Spec.hs` freezes the new behavior. The report is informational, not a tax-semantic claim. Lot consumption (Option D) was explicitly not chosen.
 
-### Perp PnL uses exchange-reported ClosedPnl; 8949 representation is unresolved
+### Perp realized PnL intentionally stays in `perp_pnl.csv`, not 8949
 
-- Status: `open`
-- Issue type: `support-boundary gap`
-- Why this is a gap: Perp close events now emit `PerpPnlEntry` with the exchange-reported `ClosedPnl` in `perp_pnl.csv`. However, the representation of derivative PnL on Form 8949 (cost-basis and proceeds columns) is not yet decided. The perp PnL report is intentionally separate from 8949 output.
-- What blocks resolution: the 8949 representation for derivative PnL is a tax-interpretation question that needs human decision or professional guidance.
-- Smallest good next checkpoint: decide how perp PnL should appear on 8949 (notional entry/exit, net settlement, or a different form entirely).
+- Status: `done`
+- Issue type: resolved
+- Resolution: Human decision recorded — canonical output keeps perp realized PnL in the separate `perp_pnl.csv` supplemental report rather than forcing derivative PnL into 8949 cost-basis/proceeds columns. The Haskell core continues to emit `PerpPnlEntry` rows only in the supplemental report.
 
 ## Non-goals / intentionally narrow boundaries
 

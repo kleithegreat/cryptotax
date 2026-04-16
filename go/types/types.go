@@ -58,6 +58,9 @@ type Transaction struct {
 	Received     *AssetAmount `json:"received"`
 	Fee          *AssetAmount `json:"fee"`
 	RawType      *string      `json:"raw_type"`
+	Market       *string      `json:"market,omitempty"`
+	EventGroupID *string      `json:"event_group_id,omitempty"`
+	SplitReason  *string      `json:"split_reason,omitempty"`
 	ClosedPnl    *string      `json:"closed_pnl,omitempty"`
 }
 

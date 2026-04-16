@@ -182,10 +182,10 @@ below for new evidence.
 - Filtered normalized case: [hl-funding-negative-2025-10-07.json](../audit/cases/hl-funding-negative-2025-10-07.json)
 - Regression fixture input: [hl-funding-negative-2025-10-07.input.json](../go/audit/testdata/real-wallet/hl-funding-negative-2025-10-07.input.json)
 - Current-normalization fixture: [hyperliquid-funding.expected.json](../go/audit/testdata/real-wallet/hyperliquid-funding.expected.json)
-- Regression coverage: `documented normalization plus focused Go/Haskell funding tests; negative-funding final tax-output semantics still pending`
+- Regression coverage: `documented normalization plus focused Go/Haskell funding tests; separate funding-expense output is implemented, but exemplar evidence linkage still needs human verification`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca --raw-type funding --from-timestamp 2025-10-07T00:00:00Z --to-timestamp 2025-10-07T23:59:59Z`
-- Current normalized JSON: `1 row; funding_payment sent USDC 0.168095 @ 0.168095 USD`
-- Human verification required: `TODO retain and review the Hyperliquid source row showing delta.usdc -0.168095 for 2025-10-07T00:00:00Z, then decide how this ordinary expense should appear in final tax output`
+- Current normalized JSON: `the checked-in filtered case file predates the market/event-group upgrade; current implementation should emit 1 row; funding_payment sent USDC 0.168095 @ 0.168095 USD plus preserved market context and event_group_id`
+- Human verification required: `TODO retain and review the Hyperliquid source row showing delta.usdc -0.168095 for 2025-10-07T00:00:00Z, confirm the market, and decide whether preserved market plus synthetic event_group_id is sufficient evidence linkage`
 
 #### 13. Hyperliquid positive funding row
 
@@ -197,8 +197,8 @@ below for new evidence.
 - Current-normalization fixture: [hyperliquid-funding.expected.json](../go/audit/testdata/real-wallet/hyperliquid-funding.expected.json)
 - Regression coverage: `documented normalization plus focused Go/Haskell funding tests; funding evidence linkage still pending`
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca --raw-type funding --from-timestamp 2025-12-02T00:00:00Z --to-timestamp 2025-12-02T23:59:59Z`
-- Current normalized JSON: `1 row; funding_payment received USDC 1.879512 @ 1.879512 USD`
-- Human verification required: `TODO retain and review the Hyperliquid source row showing delta.usdc 1.879512 for 2025-12-02T00:00:00Z, confirm whether the all-zero tx id is acceptable evidence linkage, and decide whether funding rows need a richer identifier`
+- Current normalized JSON: `the checked-in filtered case file predates the market/event-group upgrade; current implementation should emit 1 row; funding_payment received USDC 1.879512 @ 1.879512 USD plus preserved market context and event_group_id`
+- Human verification required: `TODO retain and review the Hyperliquid source row showing delta.usdc 1.879512 for 2025-12-02T00:00:00Z, confirm the market, and decide whether preserved market plus synthetic event_group_id is sufficient evidence linkage`
 
 #### 14. Hyperliquid perpetual open-long approximation
 
@@ -207,7 +207,7 @@ below for new evidence.
 - Source reference: `TODO: confirm fill 0x296c458688c54a1e2ae6042cfc24eb02026d006c23c868f0cd34f0d947c92408 from Hyperliquid and whether it was an opening perp trade`
 - Filtered normalized case: [hl-open-long-btc.json](../audit/cases/hl-open-long-btc.json)
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id 0x296c458688c54a1e2ae6042cfc24eb02026d006c23c868f0cd34f0d947c92408 --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca`
-- Current normalized JSON: `the checked-in filtered case predates the perp-decision wave and is stale; current implementation should emit 1 row; perp_open BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466`
+- Current normalized JSON: `the checked-in filtered case file is stale and still shows one spot-like buy row; current implementation should emit 1 row; perp_open BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466`
 - Human verification required: `TODO confirm this is a perp position increase rather than a spot acquisition, then decide whether the current no-lot perp_open boundary is acceptable until a fuller position model exists`
 
 #### 15. Hyperliquid perpetual close-short approximation
@@ -217,7 +217,7 @@ below for new evidence.
 - Source reference: `TODO: confirm fill 0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e from Hyperliquid and whether all four rows are one short close sequence`
 - Filtered normalized case: [hl-close-short-sol.json](../audit/cases/hl-close-short-sol.json)
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id 0xd83f79b33a4eb3a3d9b9042d4d89e20204320098d541d2757c082505f9428d8e --wallet 0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca`
-- Current normalized JSON: `the checked-in filtered case predates the perp-decision wave and is stale; current implementation should emit 4 rows; perp_close SOL totaling 31.34 units across four partial fills with per-row USDC fees plus exchange closed_pnl on each row`
+- Current normalized JSON: `the checked-in filtered case file is stale and still shows four spot-like sell rows without closed_pnl; current implementation should emit 4 rows; perp_close SOL totaling 31.34 units across four partial fills with per-row USDC fees plus exchange closed_pnl on each row`
 - Human verification required: `TODO confirm these partial rows belong to one perp close event, confirm fee conservation, and decide whether per-fill closed_pnl should remain separate or be consolidated for later reporting`
 
 ## Transaction Review Template

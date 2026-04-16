@@ -13,7 +13,7 @@ import qualified Lot
 
 data ProcessResult = ProcessResult
   { prGainLosses      :: [GainLoss]
-  , prIncome          :: [GainLoss]
+  , prIncome          :: [IncomeEntry]
   , prFundingExpenses :: [FundingExpense]
   , prPerpPnl         :: [PerpPnlEntry]
   , prFinalQueue      :: LotQueue
@@ -24,7 +24,7 @@ data ProcessResult = ProcessResult
 data AccState = AccState
   { stQueue           :: !LotQueue
   , stGains           :: [GainLoss]
-  , stIncome          :: [GainLoss]
+  , stIncome          :: [IncomeEntry]
   , stFundingExpenses :: [FundingExpense]
   , stPerpPnl         :: [PerpPnlEntry]
   , stErrors          :: [Text]
@@ -169,14 +169,11 @@ recordIncomeReceipt st tx rcv =
   let amt   = TokenAmount (parseDecimal (aaAmount rcv))
       fmv   = USD (parseDecimal (aaUSDValue rcv))
       queue = Lot.acquire (AssetSymbol (aaAsset rcv)) (txTimestamp tx) amt fmv (stQueue st)
-      entry = GainLoss
-        { glAsset     = AssetSymbol (aaAsset rcv)
-        , glAcquired  = txTimestamp tx
-        , glDisposed  = txTimestamp tx
-        , glAmount    = amt
-        , glCostBasis = 0
-        , glProceeds  = fmv
-        , glGain      = fmv
-        , glPeriod    = ShortTerm
+      entry = IncomeEntry
+        { iiTimestamp = txTimestamp tx
+        , iiTxId      = txId tx
+        , iiAsset     = AssetSymbol (aaAsset rcv)
+        , iiAmount    = amt
+        , iiUSDValue  = fmv
         }
   in st { stQueue = queue, stIncome = entry : stIncome st }

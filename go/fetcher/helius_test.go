@@ -178,4 +178,10 @@ func TestConvertHeliusTransferDoesNotInventDisplaySymbol(t *testing.T) {
 	if tx.AssetSymbol != "" {
 		t.Fatalf("expected blank display symbol when source omits it, got %q", tx.AssetSymbol)
 	}
+	if tx.EventGroupID != "sig-transfer" {
+		t.Fatalf("expected event group id %q, got %q", "sig-transfer", tx.EventGroupID)
+	}
+	if tx.SplitReason != "wallet_touching_leg_preservation" {
+		t.Fatalf("expected split reason %q, got %q", "wallet_touching_leg_preservation", tx.SplitReason)
+	}
 }

@@ -2,6 +2,7 @@
 
 module Report
   ( render8949CSV
+  , renderIncomeCSV
   , renderFundingExpenseCSV
   , renderPerpPnlCSV
   ) where
@@ -66,6 +67,23 @@ padN n t = T.replicate (max 0 (n - T.length t)) "0" <> t
 -- ---------------------------------------------------------------------------
 -- Supplemental reports — separate from 8949
 -- ---------------------------------------------------------------------------
+
+-- | Render ordinary income as a structured CSV.
+renderIncomeCSV :: [IncomeEntry] -> Text
+renderIncomeCSV entries =
+  let header = "Date,Tx ID,Asset,Amount,USD Value"
+      rows   = map renderIncomeRow entries
+  in T.unlines (header : rows)
+
+renderIncomeRow :: IncomeEntry -> Text
+renderIncomeRow ii =
+  T.intercalate ","
+    [ formatDate (iiTimestamp ii)
+    , iiTxId ii
+    , unAsset (iiAsset ii)
+    , renderAmount (iiAmount ii)
+    , renderUSD (iiUSDValue ii)
+    ]
 
 -- | Render funding expenses as a structured CSV.
 renderFundingExpenseCSV :: [FundingExpense] -> Text

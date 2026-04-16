@@ -53,7 +53,7 @@ Progress:
 
 - `docs/evm/QUIRKS.md` now captures the Etherscan spam-token symbol gotcha and the zero-amount row artifact, both grounded in `docs/known-transactions.md` evidence
 - `docs/solana/QUIRKS.md` now captures Helius mint-as-asset-name, float64 token rendering, fee attachment in multi-row parses, and enhanced endpoint fallback, all grounded in `docs/solana/ARCHITECTURE.md` and `docs/known-transactions.md` evidence
-- `docs/hyperliquid/QUIRKS.md` now captures all-zero funding hash, market context loss, `@N` spot metadata dependency, and partial fill hash sharing, all grounded in `docs/hyperliquid/ARCHITECTURE.md`, `docs/hyperliquid/REVIEW.md`, and `docs/known-transactions.md` evidence
+- `docs/hyperliquid/QUIRKS.md` now captures all-zero funding hash, older funding fixtures that predate the `market`/`event_group_id` upgrade, `@N` spot metadata dependency, and partial fill hash sharing, all grounded in `docs/hyperliquid/ARCHITECTURE.md`, `docs/hyperliquid/REVIEW.md`, and `docs/known-transactions.md` evidence
 
 Remaining:
 

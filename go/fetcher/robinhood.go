@@ -136,6 +136,7 @@ func (r *Robinhood) parseDARow(row []string, colIdx map[string]int) ([]RawTransa
 	}
 
 	var txs []RawTransaction
+	groupID := robinhoodRowGroupID(acquiredDate, saleDate, symbol, units)
 
 	// Create a synthetic buy (acquisition) if we have a cost basis
 	if acquiredDate != "" && costBasis != "" && costBasis != "0" {
@@ -144,15 +145,17 @@ func (r *Robinhood) parseDARow(row []string, colIdx map[string]int) ([]RawTransa
 			return nil, false, fmt.Errorf("invalid DATE ACQUIRED %q: %w", acquiredDate, err)
 		}
 		txs = append(txs, RawTransaction{
-			ID:        fmt.Sprintf("rh-buy-%s-%s-%s", acquiredDate, symbol, units),
-			Timestamp: acquiredTS,
-			Source:    types.SourceRobinhood,
-			Chain:     types.ChainRobinhood,
-			Wallet:    "robinhood",
-			Asset:     symbol,
-			Amount:    units,
-			USDPrice:  costBasis, // total lot cost basis from Robinhood, not per-unit
-			RawType:   "1099-DA-BUY",
+			ID:           fmt.Sprintf("rh-buy-%s-%s-%s", acquiredDate, symbol, units),
+			Timestamp:    acquiredTS,
+			Source:       types.SourceRobinhood,
+			Chain:        types.ChainRobinhood,
+			Wallet:       "robinhood",
+			EventGroupID: groupID,
+			SplitReason:  "synthetic_1099da_row",
+			Asset:        symbol,
+			Amount:       units,
+			USDPrice:     costBasis, // total lot cost basis from Robinhood, not per-unit
+			RawType:      "1099-DA-BUY",
 		})
 	}
 
@@ -167,19 +170,25 @@ func (r *Robinhood) parseDARow(row []string, colIdx map[string]int) ([]RawTransa
 			rawType = fmt.Sprintf("1099-DA-SELL-%s", term)
 		}
 		txs = append(txs, RawTransaction{
-			ID:        fmt.Sprintf("rh-sell-%s-%s-%s", saleDate, symbol, units),
-			Timestamp: saleTS,
-			Source:    types.SourceRobinhood,
-			Chain:     types.ChainRobinhood,
-			Wallet:    "robinhood",
-			Asset:     symbol,
-			Amount:    units,
-			USDPrice:  salesPrice, // total sale proceeds from Robinhood, not per-unit
-			RawType:   rawType,
+			ID:           fmt.Sprintf("rh-sell-%s-%s-%s", saleDate, symbol, units),
+			Timestamp:    saleTS,
+			Source:       types.SourceRobinhood,
+			Chain:        types.ChainRobinhood,
+			Wallet:       "robinhood",
+			EventGroupID: groupID,
+			SplitReason:  "synthetic_1099da_row",
+			Asset:        symbol,
+			Amount:       units,
+			USDPrice:     salesPrice, // total sale proceeds from Robinhood, not per-unit
+			RawType:      rawType,
 		})
 	}
 
 	return txs, len(txs) > 0, nil
+}
+
+func robinhoodRowGroupID(acquiredDate, saleDate, symbol, units string) string {
+	return fmt.Sprintf("robinhood:1099da:%s:%s:%s:%s", acquiredDate, saleDate, symbol, units)
 }
 
 // resolveCryptoSymbol extracts a crypto ticker from a DTIF name.

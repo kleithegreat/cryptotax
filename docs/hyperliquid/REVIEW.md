@@ -6,15 +6,14 @@ This document tracks grounded gaps between `docs/hyperliquid/SPEC.md` and the cu
 
 ## Open review items
 
-### Funding rows lose market context and still have weak evidence linkage
+### Funding rows now preserve market context, but the source `id` can still be weak
 
-- Status: `needs_human_decision`
-- Issue type: `schema/contract gap`, `evidence gap`
-- Why this is a spec/implementation gap: `docs/hyperliquid/SPEC.md` says the pipeline should preserve enough information for later accounting improvements and human review, and it names evidence retention and linkage for funding rows as an immediate priority. The current normalized funding row keeps only the USDC flow and a weak source identifier.
-- Current implementation evidence: `fetchFunding` in `go/fetcher/hyperliquid.go` receives `hlFunding.Delta.Coin`, stores it in `RawTransaction.Asset`, and copies `hlFunding.Hash` to `ID`. `normalizeHyperliquid` in `go/normalize/normalize.go` emits only USDC `Sent` or `Received` on `funding_payment`, so the market context is dropped. `docs/known-transactions.md` records real-wallet funding rows whose current `id` is the all-zero hash and still needs source-row retention for review.
+- Status: `open`
+- Issue type: `evidence gap`
+- Why this is still a gap: Hyperliquid funding rows now preserve market context and a stable `event_group_id`, but the source `id` from the API is still often the all-zero hash. That means source linkage is improved but not fully source-backed.
+- Current implementation evidence: `fetchFunding` in `go/fetcher/hyperliquid.go` now keeps `Delta.Coin` in `RawTransaction.Market` and synthesizes `EventGroupID` when the source hash is weak. `normalizeOne` copies both onto the IR as `market` and `event_group_id`. The normalized `id` still remains the Hyperliquid-provided hash.
 - Desired direction implied by the spec: a reviewer should be able to connect one normalized funding row back to the Hyperliquid market and source event that produced it.
-- What blocks resolution: `types.Transaction` has no dedicated market-context or secondary-source-identifier field, so preserving that context would change the IR contract.
-- Smallest good next checkpoint: decide what minimum market and evidence context a funding row must retain before implementation work starts.
+- What blocks resolution: whether the synthetic `event_group_id` plus market context is sufficient evidence for support-claim upgrades still depends on human verification of the documented exemplar cases.
 
 ### Negative funding is now a structured expense; inventory effect is not applied
 
@@ -28,19 +27,19 @@ This document tracks grounded gaps between `docs/hyperliquid/SPEC.md` and the cu
 - Issue type: resolved
 - Resolution: Decision Option C (API-PnL model) adopted — perp fills now use `perp_open` / `perp_close` tx types instead of spot `buy` / `sell`. `ClosedPnl` is propagated from the fetcher through normalization; `StartPosition` is retained only on the raw fetcher row for possible future use. The Haskell core emits `PerpPnlEntry` records using exchange-reported `ClosedPnl` in `perp_pnl.csv`. Perp opens are no-ops (no phantom lots). Perp closes do not consume spot FIFO lots. Tests `prop_perpOpenDoesNotCreateLots`, `prop_perpCloseUsesClosedPnl`, `prop_perpCloseWithoutPnlIsError`, `prop_perpCloseWithoutSentIsError`, and `prop_perpDoesNotContaminateSpotFIFO` freeze the quarantine and PnL behavior.
 
-### Perp PnL 8949 representation is unresolved
+### Perp realized PnL intentionally stays in `perp_pnl.csv`, not 8949
 
-- Status: `open`
-- Issue type: `support-boundary gap`
-- Why this is a gap: The perp PnL report uses exchange-reported `ClosedPnl` as realized PnL. The cost-basis and proceeds representation for derivative PnL on Form 8949 is unresolved (notional entry/exit? net settlement?). The separate `perp_pnl.csv` is intentionally not 8949-formatted.
-- What blocks resolution: this is a tax-interpretation question requiring human decision or professional guidance.
+- Status: `done`
+- Issue type: resolved
+- Resolution: Human decision recorded — canonical output keeps perp realized PnL in the separate `perp_pnl.csv` report rather than forcing a derivative-specific 8949 representation. The remaining open perp work is about consolidation and support verification, not about moving perps onto 8949.
 
 ### Partial-fill ClosedPnl is not consolidated
 
 - Status: `open`
 - Issue type: `support-boundary gap`
 - Why this is a gap: each API fill gets its own `PerpPnlEntry`. Multiple fills sharing one economic position change (e.g., `hl-close-short-sol` with 4 partial fills) produce 4 separate PnL rows instead of one consolidated entry.
-- Smallest good next checkpoint: decide whether fills sharing a hash or timestamp should be consolidated into one PnL entry.
+- Current implementation evidence: `fetchFills` preserves one raw row per API fill, `split_reason = "api_fill_granularity"`, and shared `event_group_id` ties related fills together. `handlePerpClose` still emits one `PerpPnlEntry` per normalized `perp_close` row.
+- Smallest good next checkpoint: decide whether fills sharing one `event_group_id` should be consolidated into one later report row.
 
 ## Non-goals / intentionally narrow boundaries
 

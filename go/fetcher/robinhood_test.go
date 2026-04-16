@@ -36,6 +36,12 @@ func TestRobinhoodParses1099DATimestamps(t *testing.T) {
 	if txs[0].USDPrice != "12345.67" || txs[1].USDPrice != "13456.78" {
 		t.Fatalf("expected cleaned USD values, got %q and %q", txs[0].USDPrice, txs[1].USDPrice)
 	}
+	if txs[0].EventGroupID == "" || txs[0].EventGroupID != txs[1].EventGroupID {
+		t.Fatalf("expected shared event group id on synthetic rows, got %q and %q", txs[0].EventGroupID, txs[1].EventGroupID)
+	}
+	if txs[0].SplitReason != "synthetic_1099da_row" || txs[1].SplitReason != "synthetic_1099da_row" {
+		t.Fatalf("expected synthetic split reason, got %q and %q", txs[0].SplitReason, txs[1].SplitReason)
+	}
 }
 
 func TestParseRobinhoodDateSupportsCompactDates(t *testing.T) {

@@ -103,6 +103,20 @@ func normalizeOne(
 		rawType := raw.RawType
 		tx.RawType = &rawType
 	}
+	if raw.Market != "" {
+		market := raw.Market
+		tx.Market = &market
+	}
+	if raw.EventGroupID != "" {
+		eventGroupID := raw.EventGroupID
+		tx.EventGroupID = &eventGroupID
+	} else if groupID := defaultEventGroupID(raw); groupID != "" {
+		tx.EventGroupID = &groupID
+	}
+	if raw.SplitReason != "" {
+		splitReason := raw.SplitReason
+		tx.SplitReason = &splitReason
+	}
 
 	switch {
 	case raw.Source == types.SourceRobinhood:
@@ -155,6 +169,10 @@ func normalizeRobinhood(tx types.Transaction, raw fetcher.RawTransaction) types.
 func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction, pp *price.Provider) types.Transaction {
 	if raw.RawType == "funding" {
 		tx.TxType = types.TxFundingPayment
+		if tx.Market == nil && raw.Asset != "" {
+			market := strings.ToUpper(raw.Asset)
+			tx.Market = &market
+		}
 		if isNegativeDecimal(raw.Amount) {
 			// Funding paid is an ordinary expense, not a spot trade or fee.
 			// Preserve it as an explicit outbound funding leg so the core can
@@ -227,6 +245,13 @@ func normalizeHyperliquid(tx types.Transaction, raw fetcher.RawTransaction, pp *
 	}
 
 	return tx
+}
+
+func defaultEventGroupID(raw fetcher.RawTransaction) string {
+	if strings.TrimSpace(raw.ID) == "" {
+		return ""
+	}
+	return fmt.Sprintf("%s:%s", raw.Source, raw.ID)
 }
 
 func normalizeHelius(

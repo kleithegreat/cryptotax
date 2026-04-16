@@ -104,6 +104,8 @@ func (h *Hyperliquid) Fetch(wallet string) ([]RawTransaction, error) {
 			Source:        types.SourceHyperliquid,
 			Chain:         types.ChainHyperliquid,
 			Wallet:        wallet,
+			EventGroupID:  hyperliquidFillGroupID(wallet, fill),
+			SplitReason:   "api_fill_granularity",
 			Asset:         coin,
 			Amount:        fill.Sz,
 			USDPrice:      fill.Px,
@@ -117,18 +119,35 @@ func (h *Hyperliquid) Fetch(wallet string) ([]RawTransaction, error) {
 
 	for _, f := range funding {
 		txs = append(txs, RawTransaction{
-			ID:        f.Hash,
-			Timestamp: f.Time / 1000,
-			Source:    types.SourceHyperliquid,
-			Chain:     types.ChainHyperliquid,
-			Wallet:    wallet,
-			Asset:     f.Delta.Coin,
-			Amount:    f.Delta.USDC,
-			RawType:   "funding",
+			ID:           f.Hash,
+			Timestamp:    f.Time / 1000,
+			Source:       types.SourceHyperliquid,
+			Chain:        types.ChainHyperliquid,
+			Wallet:       wallet,
+			Market:       f.Delta.Coin,
+			EventGroupID: hyperliquidFundingGroupID(wallet, f),
+			Asset:        f.Delta.Coin,
+			Amount:       f.Delta.USDC,
+			RawType:      "funding",
 		})
 	}
 
 	return txs, nil
+}
+
+func hyperliquidFillGroupID(wallet string, fill hlFill) string {
+	if strings.TrimSpace(fill.Hash) != "" {
+		return "hyperliquid:fill:" + fill.Hash
+	}
+	return fmt.Sprintf("hyperliquid:fill:%s:%d:%s:%s:%s", strings.ToLower(wallet), fill.Time, fill.Coin, fill.Dir, fill.Sz)
+}
+
+func hyperliquidFundingGroupID(wallet string, funding hlFunding) string {
+	trimmedHash := strings.TrimSpace(funding.Hash)
+	if trimmedHash != "" && trimmedHash != "0x0000000000000000000000000000000000000000000000000000000000000000" {
+		return "hyperliquid:funding:" + trimmedHash
+	}
+	return fmt.Sprintf("hyperliquid:funding:%s:%d:%s:%s", strings.ToLower(wallet), funding.Time, funding.Delta.Coin, funding.Delta.USDC)
 }
 
 func (h *Hyperliquid) fetchFills(wallet string) ([]hlFill, error) {

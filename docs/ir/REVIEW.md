@@ -12,15 +12,11 @@ This document tracks grounded gaps between `docs/ir/SPEC.md` and the current imp
 - Issue type: resolved
 - Resolution: Decision Option B adopted — `AssetAmount` gained an optional `asset_canonical` field in both Go (`go/types/types.go`) and Haskell (`haskell/src/Types.hs`). The Helius normalizer populates `asset_canonical` with the Solana mint when a source-backed display symbol is present. Old payloads without the field parse as `Nothing` (backward compatible). Downstream consumers (lot tracking, transfer matching, audit accumulation) have not yet adopted canonical identity; that adoption is incremental and separate from this schema change.
 
-### The IR cannot distinguish intentional multi-row preservation from current-behavior splitting
+### The IR now distinguishes intentional multi-row preservation from flat row output
 
-- Status: `needs_human_decision`
-- Issue type: `schema/contract gap`, `support-boundary gap`
-- Why this is a spec/implementation gap: `docs/ir/SPEC.md` calls out multi-leg support boundaries and says the repository should clarify when a split-row representation is intentional versus merely current behavior. The current row contract has no field for grouping semantics or split reason.
-- Current implementation evidence: `normalizeEVM` in `go/normalize/normalize.go` emits one row per raw Etherscan movement. `convertTransfer` and `convertGeneric` in `go/fetcher/helius.go` can emit many rows for one Helius transaction. `fetchFills` in `go/fetcher/hyperliquid.go` emits one raw row per fill, while `docs/hyperliquid/ARCHITECTURE.md` documents that partial fills sharing one hash stay separate. `MatchTransfers` in `go/transfer/match.go` can relabel rows after normalization, but it does not add grouping metadata to `types.Transaction`.
-- Desired direction implied by the spec: the IR should let audit and downstream accounting tell the difference between deliberate conservative multi-row output and a representation that is only a temporary approximation.
-- What blocks resolution: `types.Transaction` currently has only `ID`, `RawType`, and the three asset legs, so adding grouping or representation metadata would be a cross-domain IR contract change.
-- Smallest good next checkpoint: decide whether the IR needs explicit event-grouping or representation-tier metadata before multi-leg support expands further.
+- Status: `done`
+- Issue type: resolved
+- Resolution: `types.Transaction` gained optional `event_group_id` and `split_reason` fields in Go and Haskell. The normalization pipeline now uses them to preserve row-group context across sources: Hyperliquid fills use `api_fill_granularity`, Helius transfer/generic rows use `wallet_touching_leg_preservation`, Robinhood synthetic buy/sell pairs use `synthetic_1099da_row`, and Etherscan rows use `source_transfer_granularity`. Hyperliquid funding rows also preserve `market` plus stable `event_group_id` context.
 
 ### Normalization skip diagnostics are structured and persisted by audit capture
 

@@ -26,23 +26,23 @@ For each case below, the human reviewer should:
 - **Label:** `hl-funding-negative-2025-10-07`
 - **Source system:** Hyperliquid funding history
 - **Known-transactions entry:** `hl-funding-negative-2025-10-07`
-- **Current normalized description:** 1 row; `funding_payment` sent USDC 0.168095 @ 0.168095 USD
+- **Current normalized description:** The checked-in filtered case file predates the market/event-group upgrade. Current implementation should emit 1 row; `funding_payment` sent USDC 0.168095 @ 0.168095 USD plus preserved `market` and `event_group_id`.
 - **Regression fixture:** `go/audit/testdata/real-wallet/hyperliquid-funding.expected.json`
 - **Filtered case file:** `audit/cases/hl-funding-negative-2025-10-07.json`
 
 ### Unresolved question for the human
 
 1. Retain and review the Hyperliquid source row showing `delta.usdc -0.168095` for `2025-10-07T00:00:00Z`. Does the source data confirm the amount, timestamp, and market?
-2. The normalized row loses which Hyperliquid market produced this funding payment (see the divergence note in `docs/hyperliquid/ARCHITECTURE.md` and the `Funding rows lose market context and still have weak evidence linkage` review item in `docs/hyperliquid/REVIEW.md`). Is the current USDC-only representation acceptable for evidence purposes, or must market context be retained before this case can be verified?
-3. The repo now emits this ordinary negative funding expense in a separate `funding_expenses.csv` report without USDC lot consumption. Is that informational boundary acceptable once evidence is verified, or is more source/context needed first? (See `docs/hyperliquid/REVIEW.md` and `docs/core/REVIEW.md`.)
+2. The normalized row now preserves `market` and `event_group_id` in addition to the USDC flow. Is that enough evidence linkage for this case, or is the all-zero Hyperliquid `id` still too weak to treat the row as verified?
+3. The repo emits this ordinary negative funding expense in a separate `funding_expenses.csv` report without USDC lot consumption. Once the evidence is verified, is that current reporting boundary acceptable?
 
 ### Blocker category
 
-**Multiple** — evidence linkage (market context dropped, source row not yet retained) and final-output support boundary (separate report implemented, but not yet human-verified).
+**Evidence linkage** — market context is now preserved, but human verification still has to decide whether the all-zero source `id` plus synthetic `event_group_id` is strong enough evidence.
 
 ### Support-boundary upgrade this case could unlock
 
-Resolving evidence linkage and confirming the current separate-report boundary contributes to unblocking `hyperliquid.funding_evidence_and_expense_semantics_upgrade`, which then feeds into downstream support-boundary cleanup under `core.accounting_support_upgrade`.
+Resolving evidence linkage and confirming the current separate-report boundary contributes to unblocking `hyperliquid.funding_evidence_and_expense_semantics_upgrade`. The negative-funding output checkpoint itself is already implemented; the remaining work is evidence-backed support-boundary cleanup.
 
 ---
 
@@ -51,23 +51,22 @@ Resolving evidence linkage and confirming the current separate-report boundary c
 - **Label:** `hl-funding-positive-2025-12-02`
 - **Source system:** Hyperliquid funding history
 - **Known-transactions entry:** `hl-funding-positive-2025-12-02`
-- **Current normalized description:** 1 row; `funding_payment` received USDC 1.879512 @ 1.879512 USD
+- **Current normalized description:** The checked-in filtered case file predates the market/event-group upgrade. Current implementation should emit 1 row; `funding_payment` received USDC 1.879512 @ 1.879512 USD plus preserved `market` and `event_group_id`.
 - **Regression fixture:** `go/audit/testdata/real-wallet/hyperliquid-funding.expected.json`
 - **Filtered case file:** `audit/cases/hl-funding-positive-2025-12-02.json`
 
 ### Unresolved question for the human
 
 1. Retain and review the Hyperliquid source row showing `delta.usdc 1.879512` for `2025-12-02T00:00:00Z`. Does the source data confirm the amount, timestamp, and market?
-2. The current normalized `id` is the all-zero hash propagated from the Hyperliquid API. Is this acceptable evidence linkage, or do funding rows need a richer synthetic identifier before this case can be verified? (See the `Funding rows lose market context and still have weak evidence linkage` review item in `docs/hyperliquid/REVIEW.md` and the divergence note in `docs/hyperliquid/ARCHITECTURE.md`.)
-3. The normalized row drops market context. Should the reviewer require market context to be preserved in the IR before signing off, or is USDC-flow-only verification sufficient for the positive funding path?
+2. The current normalized `id` is still the all-zero hash propagated from the Hyperliquid API, but the row now also carries preserved `market` and `event_group_id`. Is that enough evidence linkage, or is a stronger source identifier still required before this case can be verified?
 
 ### Blocker category
 
-**Evidence linkage** — the all-zero source hash and dropped market context make it difficult to trace this row back to the specific Hyperliquid funding event.
+**Evidence linkage** — the all-zero source hash still makes this row weaker than a source-backed unique identifier even though `market` and `event_group_id` are now preserved.
 
 ### Support-boundary upgrade this case could unlock
 
-Resolving evidence linkage for positive funding contributes to unblocking `hyperliquid.funding_evidence_and_expense_semantics_upgrade`. Positive funding already reaches the Haskell income path, so verified evidence linkage here would strengthen the existing income-receipt support claim without requiring an output-semantics decision.
+Resolving evidence linkage for positive funding contributes to unblocking `hyperliquid.funding_evidence_and_expense_semantics_upgrade`. Positive funding already reaches the Haskell income path, so verified evidence linkage here would strengthen the existing income-receipt support claim without reopening the already-resolved negative-funding output decision.
 
 ---
 
@@ -76,7 +75,7 @@ Resolving evidence linkage for positive funding contributes to unblocking `hyper
 - **Label:** `hl-open-long-btc`
 - **Source system:** Hyperliquid fill history
 - **Known-transactions entry:** `hl-open-long-btc`
-- **Current normalized description:** The checked-in filtered case predates the perp-decision wave and is stale. Current implementation should emit 1 row; `perp_open` BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466.
+- **Current normalized description:** The checked-in filtered case file is stale and still shows one spot-like `buy` row. Current implementation should emit 1 row; `perp_open` BTC 0.0004 @ 49.92600000 USD with USDC fee 0.022466.
 - **Filtered case file:** `audit/cases/hl-open-long-btc.json`
 
 ### Unresolved question for the human
@@ -91,7 +90,7 @@ Resolving evidence linkage for positive funding contributes to unblocking `hyper
 
 ### Support-boundary upgrade this case could unlock
 
-Verifying the source event and confirming the current no-lot boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`, which then feeds into downstream support-boundary cleanup under `core.accounting_support_upgrade`.
+Verifying the source event and confirming the current no-lot boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`. The perp-quarantine implementation checkpoint is already done; the remaining work is evidence-backed support-boundary cleanup.
 
 ---
 
@@ -100,7 +99,7 @@ Verifying the source event and confirming the current no-lot boundary contribute
 - **Label:** `hl-close-short-sol`
 - **Source system:** Hyperliquid fill history
 - **Known-transactions entry:** `hl-close-short-sol`
-- **Current normalized description:** The checked-in filtered case predates the perp-decision wave and is stale. Current implementation should emit 4 rows; `perp_close` SOL totals 31.34 units across four partial fills with per-row USDC fees plus exchange `closed_pnl` on each row.
+- **Current normalized description:** The checked-in filtered case file is stale and still shows four spot-like `sell` rows without `closed_pnl`. Current implementation should emit 4 rows; `perp_close` SOL totals 31.34 units across four partial fills with per-row USDC fees plus exchange `closed_pnl` on each row.
 - **Filtered case file:** `audit/cases/hl-close-short-sol.json`
 
 ### Unresolved question for the human
@@ -116,7 +115,7 @@ Verifying the source event and confirming the current no-lot boundary contribute
 
 ### Support-boundary upgrade this case could unlock
 
-Verifying the source event and confirming the current partial-fill boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`. The fill-grouping question also feeds into the broader IR contract discussion at `decision.ir_contract_refinement`. Together these chain into downstream support-boundary cleanup under `core.accounting_support_upgrade`.
+Verifying the source event and confirming the current partial-fill boundary contributes to unblocking `hyperliquid.perp_semantics_upgrade`. The fill-grouping question also feeds into the open IR review item about intentional multi-row preservation versus current-behavior splitting in `docs/ir/REVIEW.md`.
 
 ---
 
@@ -124,18 +123,18 @@ Verifying the source event and confirming the current partial-fill boundary cont
 
 | Case | Blocker category | Primary DAG node unblocked | Needs human decision node? |
 | --- | --- | --- | --- |
-| `hl-funding-negative-2025-10-07` | multiple (evidence linkage + final-output support boundary) | `hyperliquid.funding_evidence_and_expense_semantics_upgrade` | No: decision resolved; human verification still pending |
+| `hl-funding-negative-2025-10-07` | evidence linkage | `hyperliquid.funding_evidence_and_expense_semantics_upgrade` | No: output decision resolved; human verification still pending |
 | `hl-funding-positive-2025-12-02` | evidence linkage | `hyperliquid.funding_evidence_and_expense_semantics_upgrade` | No (income path already exists) |
 | `hl-open-long-btc` | perp interpretation | `hyperliquid.perp_semantics_upgrade` | No: decision resolved; human verification still pending |
 | `hl-close-short-sol` | multiple (perp interpretation + evidence linkage) | `hyperliquid.perp_semantics_upgrade` | No: decision resolved; human verification still pending |
 
 ## Shared open questions across all cases
 
-1. **Market context retention:** All four cases share the gap that `normalizeHyperliquid` drops market context. The funding cases lose `Delta.Coin`; the fill cases preserve `Coin` in the asset field but lose any explicit market/contract identifier. This is documented in `docs/hyperliquid/ARCHITECTURE.md` and the `Funding rows lose market context and still have weak evidence linkage` review item in `docs/hyperliquid/REVIEW.md`.
+1. **Funding evidence strength:** Funding rows now preserve `market` and `event_group_id`, but the Hyperliquid-provided `id` can still be the all-zero hash. Human verification still has to decide whether that upgraded context is sufficient.
 
-2. **Source identifier weakness:** The funding cases use an all-zero hash as their `id`. The fill cases use the Hyperliquid fill hash, which is stronger but still one-hash-per-API-row rather than one-hash-per-economic-event. There is no current consolidation step.
+2. **Source identifier weakness on fills:** The fill cases use the Hyperliquid fill hash, which is stronger than funding ids but still one-hash-per-API-row rather than one-hash-per-economic-event. There is no current consolidation step.
 
-3. **IR contract boundary:** Both the perp-fill approximation and the funding-market-context gap ultimately depend on `types.Transaction` having enough fields to carry the necessary context. This is tracked at `decision.ir_contract_refinement` in the DAG.
+3. **IR contract boundary:** `event_group_id` and `split_reason` are now present in the IR. The remaining question is not whether the IR can carry grouping metadata, but how downstream reporting should use it for consolidation and support-boundary work.
 
 ## Grounding references
 
@@ -145,7 +144,7 @@ All content above is derived from:
 - `docs/hyperliquid/SPEC.md`
 - `docs/hyperliquid/ARCHITECTURE.md`
 - `docs/hyperliquid/REVIEW.md`
-- the `Negative funding_payment is preserved but has no decided accounting or output semantics` review item in `docs/core/REVIEW.md`
-- `docs/repo/TASK_DAG.md` nodes: `verification.expand_human_verified_exemplars`, `hyperliquid.funding_evidence_and_expense_semantics_upgrade`, `hyperliquid.perp_semantics_upgrade`, `core.accounting_support_upgrade`
+- the structured funding and perp output boundaries in `docs/core/REVIEW.md`
+- `docs/repo/TASK_DAG.md` nodes: `verification.expand_human_verified_exemplars`, `hyperliquid.funding_evidence_and_expense_semantics_upgrade`, `hyperliquid.perp_semantics_upgrade`
 - `docs/audit/SPEC.md` human-verification boundary
 - `docs/audit-workflow.md`

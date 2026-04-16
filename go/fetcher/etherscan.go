@@ -177,15 +177,17 @@ func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction
 			}
 
 			raw := RawTransaction{
-				ID:        tx.Hash,
-				Timestamp: timestamp,
-				Source:    types.SourceEtherscan,
-				Chain:     e.Chain,
-				Wallet:    wallet,
-				FromAddr:  tx.From,
-				ToAddr:    tx.To,
-				FeeAsset:  "ETH",
-				RawType:   tx.FunctionName,
+				ID:           tx.Hash,
+				Timestamp:    timestamp,
+				Source:       types.SourceEtherscan,
+				Chain:        e.Chain,
+				Wallet:       wallet,
+				EventGroupID: tx.Hash,
+				SplitReason:  "source_transfer_granularity",
+				FromAddr:     tx.From,
+				ToAddr:       tx.To,
+				FeeAsset:     "ETH",
+				RawType:      tx.FunctionName,
 			}
 
 			// Gas fee = gasUsed * gasPrice (in wei), converted to ether.

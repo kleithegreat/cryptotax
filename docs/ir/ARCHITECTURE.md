@@ -41,7 +41,7 @@ Important named constructs:
 
 - `buildPayload` collects raw rows from the configured fetchers, keeps the explicit wallet list with `appendUniqueWallet`, and creates a shared `price.Provider`.
 - Each fetcher emits `fetcher.RawTransaction`. That shape still carries source-specific fields such as `FromAddr`, `ToAddr`, `Asset`, `AssetSymbol`, `Asset2`, `Asset2Symbol`, `Fee`, `USDPrice`, and `RawType`.
-- `Normalize` loops over raw rows and calls `normalizeOne`. `normalizeOne` always sets `ID`, `Timestamp`, `Source`, `Chain`, `Wallet`, and optional `RawType` before dispatching to `normalizeRobinhood`, `normalizeHyperliquid`, `normalizeHelius`, or `normalizeEVM`.
+- `Normalize` loops over raw rows and calls `normalizeOne`. `normalizeOne` always sets `ID`, `Timestamp`, `Source`, `Chain`, `Wallet`, and optional `RawType`, `Market`, `EventGroupID`, and `SplitReason` before dispatching to `normalizeRobinhood`, `normalizeHyperliquid`, `normalizeHelius`, or `normalizeEVM`.
 - Normalization populates the IR as one `types.Transaction` per raw row. The main exception is upstream on the Helius side, where `convertSwap` already turns one enhanced transaction into one raw swap row with both legs.
 - `MatchTransfers` runs after normalization and can relabel already-normalized rows when they match an own-wallet transfer pair or the narrow confirmed bridge pair.
 - `buildPayload` sorts the final `[]types.Transaction` by `Timestamp` and returns `types.TxPayload{Version, Wallets, Transactions}`.
@@ -50,7 +50,7 @@ Important named constructs:
 ## Outputs / side effects
 
 - The top-level JSON object has `version`, `wallets`, and `transactions`.
-- Each normalized `Transaction` currently carries `id`, `timestamp`, `source`, `chain`, `tx_type`, `wallet`, `counterparty`, `sent`, `received`, `fee`, `raw_type`, and optionally `closed_pnl` (for perp closes).
+- Each normalized `Transaction` currently carries `id`, `timestamp`, `source`, `chain`, `tx_type`, `wallet`, `counterparty`, `sent`, `received`, `fee`, `raw_type`, and optionally `market`, `event_group_id`, `split_reason`, and `closed_pnl` (for perp closes).
 - Each `AssetAmount` carries `asset` (display string), optional `asset_canonical` (canonical identity when it differs from display), `amount`, and `usd_value`.
 - `NormalizeWithDiagnostics` returns a `NormalizeResult` containing both the normalized `Transactions` and structured `[]SkippedRow` diagnostics (tx ID, source, chain, raw type, reason). `Normalize` wraps it and prints skipped-row warnings to stderr for backward compatibility.
 - `buildPayload` calls `NormalizeWithDiagnostics` and returns `[]SkippedRow` alongside the payload. It also logs skipped rows to its stderr writer for backward-compatible console output.
@@ -66,7 +66,7 @@ Important named constructs:
 
 ### Current-behavior-only checkpoints
 
-- `go/normalize/normalize_test.go` freezes several normalization decisions, including Hyperliquid funding rows and Solana mint-versus-symbol handling.
+- `go/normalize/normalize_test.go` freezes several normalization decisions, including Hyperliquid funding market propagation, Hyperliquid perp grouping metadata, and Solana mint-versus-symbol handling.
 - `go/transfer/match_test.go` freezes the narrow confirmed bridge relabeling behavior.
 - `go/audit/testdata/real-wallet/*.expected.json` freezes selected real-wallet normalized payloads without claiming semantic or tax correctness.
 
@@ -75,6 +75,7 @@ Important named constructs:
 - Unknown valuations still reach the IR as `usd_value: "0"`.
 - Address-like and mint-like asset strings remain in the payload instead of being rewritten.
 - Hyperliquid perp fills now enter the IR as `perp_open` and `perp_close` rows, quarantined from spot `buy`/`sell`. Perp closes carry `closed_pnl` from the exchange API.
+- Grouped or conservatively split rows now carry `event_group_id` and, when known, `split_reason`.
 
 ## Current known approximations or conservative behavior
 
@@ -82,7 +83,8 @@ Important named constructs:
 - `resolveUSDPrice` returns `"0"` when pricing is unavailable or the asset is outside `price.coingeckoIDs` in `go/price/coingecko.go`.
 - EVM rows currently use the source token symbol that `go/fetcher/etherscan.go` receives from Etherscan. Contract-address identity is not present in the normalized row.
 - Solana rows currently use a source-backed symbol when Helius provides one, and otherwise fall back to the mint string.
+- `event_group_id` and `split_reason` are preserved in the IR, but most downstream consumers do not yet use them for consolidation or reporting.
 
 ## Notable current divergence from spec
 
-- The Helius raw path preserves mint identity and source-backed symbol separately in `fetcher.RawTransaction`, but `normalizeHelius`, `heliusDisplayAsset`, and `heliusPriceLookupAsset` collapse that pair into one normalized `AssetAmount.Asset`. When a symbol is present, the normalized row keeps the symbol and loses the mint. This is a concrete IR contract gap and likely belongs in a future `docs/ir/REVIEW.md`.
+- No additional schema divergence remains around canonical-versus-display identity or multi-row representation metadata: normalized rows now preserve `asset_canonical`, `event_group_id`, and `split_reason`. The remaining gaps are downstream adoption and evidence-backed support claims, not missing IR fields.

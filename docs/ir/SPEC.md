@@ -63,10 +63,20 @@ The IR now supports `perp_open` and `perp_close` transaction types for Hyperliqu
 
 `perp_close` rows carry an optional `closed_pnl` field containing the exchange-reported realized PnL. This field is populated from the Hyperliquid API's `ClosedPnl` value during normalization.
 
+## Event grouping and market context
+
+Normalized `Transaction` rows may now carry three additional optional fields:
+
+- `market`: source-backed market context when the row needs it, currently used for Hyperliquid funding rows
+- `event_group_id`: a stable key tying related normalized rows back to one source event or representation group
+- `split_reason`: a short explanation for why one source event is represented as many normalized rows
+
+These fields are additive and backward compatible. They exist so audit and downstream accounting can tell the difference between one flat source row and a conservative multi-row representation.
+
 ## Near-term design priority
 
 The repository should continue clarifying the IR around:
 
 - incremental consumer adoption of `asset_canonical` for lot tracking, transfer matching, and audit accumulation
-- support boundaries for multi-leg events
-- when a split-row representation is intentional vs merely current behavior
+- downstream use of `event_group_id` and `split_reason` in audit and support-boundary work
+- support boundaries for multi-leg events now that representation metadata is available

@@ -46,6 +46,12 @@ type RawTransaction struct {
 
 	// Original type string from the source for debugging.
 	RawType string
+	Market  string
+
+	// Optional grouping metadata for cases where one source event yields multiple
+	// normalized rows, or where a weak source id needs a stable event key.
+	EventGroupID string
+	SplitReason  string
 
 	// Hyperliquid perp fields — populated only for fill rows.
 	ClosedPnl     string // exchange-reported realized PnL for this fill

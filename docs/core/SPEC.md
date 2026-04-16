@@ -49,18 +49,20 @@ The core should not own:
 
 ## Supplemental output channels
 
-The core now supports two structured output channels beyond the 8949 CSV:
+The core now supports three structured output channels beyond the 8949 CSV:
 
-1. **Funding expense report** (`funding_expenses.csv`): Negative Hyperliquid funding is emitted as structured `FundingExpense` entries. These are informational expense records, not tax-semantic claims. The funding expense does not affect USDC inventory (no lot consumption). Written only when funding expenses exist.
+1. **Income report** (`income.csv`): Ordinary income rows are emitted as structured `IncomeEntry` records with timestamp, tx id, asset, amount, and USD value. Written only when income entries exist.
 
-2. **Perp realized PnL report** (`perp_pnl.csv`): Perp close events with exchange-reported `ClosedPnl` are emitted as `PerpPnlEntry` records. This is intentionally separate from 8949 because the cost-basis/proceeds representation for derivative PnL on Form 8949 is unresolved. Written only when perp PnL entries exist.
+2. **Funding expense report** (`funding_expenses.csv`): Negative Hyperliquid funding is emitted as structured `FundingExpense` entries. These are informational expense records, not tax-semantic claims. The funding expense does not affect USDC inventory (no lot consumption). Written only when funding expenses exist.
 
-Canonical output keeps perp realized PnL and funding cash flows separate. A derived net-performance summary may be added later.
+3. **Perp realized PnL report** (`perp_pnl.csv`): Perp close events with exchange-reported `ClosedPnl` are emitted as `PerpPnlEntry` records. Canonical output intentionally keeps these rows separate from 8949 rather than forcing a derivative-specific cost-basis/proceeds representation into the 8949 CSV. Written only when perp PnL entries exist.
+
+Canonical output keeps income, perp realized PnL, and funding cash flows in separate supplemental channels from 8949.
 
 ## Immediate review priorities
 
 The highest-priority open semantics questions for the core are:
 
-- how broader income/expense handling should be represented when upstream normalization is conservative but incomplete
+- how unsupported transfer-like rows should remain visible downstream instead of disappearing in the core
 - incremental adoption of `asset_canonical` for lot tracking keys
-- the 8949 cost-basis/proceeds representation for perp PnL (currently surfaced in a separate report)
+- whether any broader non-8949 output channels are needed beyond the current supplemental CSVs

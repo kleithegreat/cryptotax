@@ -229,14 +229,14 @@ prop_swapDecomposition = forAll genSwapData $ \(sentAmt, sentPx, rcvAmt, rcvPx) 
         { txId = "buy1", txTimestamp = t1, txSource = "test", txChain = "test"
         , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
         , txReceived = Just (AssetAmount "ETH" Nothing (showI sentAmt) (showI (sentAmt * sentPx)))
-        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       swapTx = Transaction
         { txId = "swap1", txTimestamp = t2, txSource = "test", txChain = "test"
         , txType = Swap, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "ETH" Nothing (showI sentAmt) (showI (sentAmt * sentPx)))
         , txReceived = Just (AssetAmount "SOL" Nothing (showI rcvAmt) (showI (rcvAmt * rcvPx)))
-        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [buyTx, swapTx]
   in conjoin
@@ -284,7 +284,7 @@ prop_jsonRoundtrip = forAll genTxPayload $ \payload ->
       closedPnl <- case txType' of
         PerpClose -> Just . T.pack . show <$> (choose (-5000, 5000) :: Gen Integer)
         _         -> pure Nothing
-      pure $ Transaction txId' ts "test" "ethereum" txType' "0xabc" Nothing sent rcv Nothing Nothing closedPnl
+      pure $ Transaction txId' ts "test" "ethereum" txType' "0xabc" Nothing sent rcv Nothing Nothing Nothing Nothing Nothing closedPnl
 
     genAssetAmount = do
       asset <- elements ["ETH", "BTC", "SOL", "USDC"]
@@ -305,13 +305,13 @@ prop_outOfOrderHandled = forAll genAmtPx $ \(amt, px) ->
         { txId = "buy1", txTimestamp = t1, txSource = "test", txChain = "test"
         , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
         , txReceived = Just (AssetAmount "ETH" Nothing (showI amt) (showI (amt * px)))
-        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       sellTx = Transaction
         { txId = "sell1", txTimestamp = t2, txSource = "test", txChain = "test"
         , txType = Sell, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "ETH" Nothing (showI amt) (showI (amt * px)))
-        , txReceived = Nothing, txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        , txReceived = Nothing, txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       -- Reverse order: sell before buy
       result = processTransactions [sellTx, buyTx]
@@ -398,15 +398,17 @@ prop_positiveFundingCreatesIncomeAndLot = once $
         , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
         , txSent = Nothing
         , txReceived = Just (AssetAmount "USDC" Nothing "1.879512" "1.879512")
-        , txFee = Nothing, txRawType = Just "funding", txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Just "funding", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in conjoin
-       [ property (null (prErrors result))
-       , property (length (prIncome result) == 1)
-       , Lot.totalUnits "USDC" (prFinalQueue result) === TokenAmount (469878 % 250000)
-       , Lot.totalCostBasis (prFinalQueue result) === USD (469878 % 250000)
-       ]
+        [ property (null (prErrors result))
+        , property (length (prIncome result) == 1)
+        , iiUSDValue (head (prIncome result)) === USD (469878 % 250000)
+        , iiAsset (head (prIncome result)) === "USDC"
+        , Lot.totalUnits "USDC" (prFinalQueue result) === TokenAmount (469878 % 250000)
+        , Lot.totalCostBasis (prFinalQueue result) === USD (469878 % 250000)
+        ]
 
 -- ---------------------------------------------------------------------------
 -- 17. Negative funding produces a structured FundingExpense (not an error)
@@ -420,7 +422,7 @@ prop_negativeFundingCreatesStructuredExpense = once $
         , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "USDC" Nothing "0.168095" "0.168095")
         , txReceived = Nothing
-        , txFee = Nothing, txRawType = Just "funding", txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Just "funding", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in conjoin
@@ -444,7 +446,7 @@ prop_perpOpenDoesNotCreateLots = once $
         , txType = PerpOpen, txWallet = "w1", txCounterparty = Nothing
         , txSent = Nothing
         , txReceived = Just (AssetAmount "BTC" Nothing "0.0004" "49.93")
-        , txFee = Nothing, txRawType = Just "Open Long", txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Just "Open Long", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in conjoin
@@ -466,7 +468,7 @@ prop_perpCloseUsesClosedPnl = once $
         , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "SOL" Nothing "10.5" "2100.00")
         , txReceived = Nothing
-        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Just "42.50"
+        , txFee = Nothing, txRawType = Just "Close Long", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Just "42.50"
         }
       result = processTransactions [tx]
   in conjoin
@@ -492,7 +494,7 @@ prop_perpCloseWithoutPnlIsError = once $
         , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "SOL" Nothing "10.5" "2100.00")
         , txReceived = Nothing
-        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Just "Close Long", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in conjoin
@@ -511,7 +513,7 @@ prop_perpCloseWithoutSentIsError = once $
         { txId = "perp-close-no-sent", txTimestamp = t, txSource = "hyperliquid", txChain = "hyperliquid"
         , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
         , txSent = Nothing, txReceived = Nothing
-        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Just "42.50"
+        , txFee = Nothing, txRawType = Just "Close Long", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Just "42.50"
         }
       result = processTransactions [tx]
   in conjoin
@@ -534,14 +536,14 @@ prop_perpDoesNotContaminateSpotFIFO = once $
         { txId = "spot-buy", txTimestamp = t1, txSource = "robinhood", txChain = "robinhood"
         , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
         , txReceived = Just (AssetAmount "BTC" Nothing "1" "40000")
-        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       -- Perp open: should NOT create a phantom BTC lot
       perpOpen = Transaction
         { txId = "perp-open", txTimestamp = t2, txSource = "hyperliquid", txChain = "hyperliquid"
         , txType = PerpOpen, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
         , txReceived = Just (AssetAmount "BTC" Nothing "5" "250000")
-        , txFee = Nothing, txRawType = Just "Open Long", txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Just "Open Long", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       -- Perp close: should NOT consume the spot BTC lot
       perpClose = Transaction
@@ -549,7 +551,7 @@ prop_perpDoesNotContaminateSpotFIFO = once $
         , txType = PerpClose, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "BTC" Nothing "5" "260000")
         , txReceived = Nothing
-        , txFee = Nothing, txRawType = Just "Close Long", txClosedPnl = Just "10000"
+        , txFee = Nothing, txRawType = Just "Close Long", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Just "10000"
         }
       -- Spot sell: should find the original spot lot intact
       spotSell = Transaction
@@ -557,7 +559,7 @@ prop_perpDoesNotContaminateSpotFIFO = once $
         , txType = Sell, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "BTC" Nothing "1" "50000")
         , txReceived = Nothing
-        , txFee = Nothing, txRawType = Nothing, txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [spotBuy, perpOpen, perpClose, spotSell]
   in conjoin

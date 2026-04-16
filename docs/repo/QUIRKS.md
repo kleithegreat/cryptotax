@@ -25,4 +25,4 @@ The repository prefers agents to perform validation and report the actual result
 
 ## 5. Source-specific weirdness should move into domain quirks docs over time
 
-As the docs hierarchy matures, repository-wide quirks should stay minimal. Source-specific gotchas should live in their own domain `QUIRKS.md` files. Current domain quirks coverage: `docs/evm/QUIRKS.md` (Etherscan spam symbols, zero-amount artifacts), `docs/solana/QUIRKS.md` (Helius mint-as-asset, float64 rendering, fee attachment, endpoint fallback), `docs/hyperliquid/QUIRKS.md` (all-zero funding hash, market context loss, `@N` resolution, partial fill sharing).
+As the docs hierarchy matures, repository-wide quirks should stay minimal. Source-specific gotchas should live in their own domain `QUIRKS.md` files. Current domain quirks coverage: `docs/evm/QUIRKS.md` (Etherscan spam symbols, zero-amount artifacts), `docs/solana/QUIRKS.md` (Helius mint-as-asset, float64 rendering, fee attachment, endpoint fallback), `docs/hyperliquid/QUIRKS.md` (all-zero funding hash, older fixtures that predate the `market`/`event_group_id` upgrade, `@N` resolution, partial fill sharing).

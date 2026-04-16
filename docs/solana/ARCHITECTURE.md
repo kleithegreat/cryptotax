@@ -43,16 +43,17 @@ Important named constructs:
 - `parseEnhanced` then posts batched signature lists to the Helius enhanced-transactions endpoint. `shouldFallbackHeliusEnhanced` triggers a retry against `LegacyEnhancedURL` for the current 530 and 1016 failure shapes.
 - `convertHeliusTx` dispatches on `heliusEnhancedTx.Type`.
 - `convertSwap` produces one `fetcher.RawTransaction` with `Asset` and `Asset2` for the wallet-touching sent and received legs. It preserves the raw mint in `Asset` or `Asset2` and carries any source-backed symbol separately in `AssetSymbol` or `Asset2Symbol`.
-- `convertTransfer` emits one raw row per wallet-touching token transfer or native transfer. `convertGeneric` does the same for non-`TRANSFER` non-`SWAP` Helius transaction types.
+- `convertTransfer` emits one raw row per wallet-touching token transfer or native transfer. `convertGeneric` does the same for non-`TRANSFER` non-`SWAP` Helius transaction types. Those rows share `event_group_id = signature` and carry `split_reason = "wallet_touching_leg_preservation"`.
 - `attachFeeToPrimaryHeliusRow` attaches the full signature fee to the first outbound raw row only so fee totals stay conserved across multi-row parses.
 - `normalizeHelius` turns any raw row with `Asset2` into a normalized `swap`. For non-swap rows it uses `classifyAddressMovement` to choose between `transfer_out`, `sell`, and `transfer_in`.
-- `normalizeHelius` uses `heliusPriceLookupAsset` for USD lookup and `heliusDisplayAsset` for the normalized `asset` string. If Helius supplies a separate symbol, the normalized row uses that symbol; otherwise it uses the mint string as the displayed asset.
+- `normalizeHelius` uses `heliusPriceLookupAsset` for USD lookup and `heliusDisplayAsset` for the normalized display `asset` string. If Helius supplies a separate symbol, the normalized row uses that symbol in `asset` and preserves the raw mint in `asset_canonical`; otherwise it uses the mint string as the displayed asset and omits `asset_canonical`.
 
 ## Outputs / side effects
 
 - Solana rows enter the IR with `source="helius"` and `chain="solana"`.
 - `raw_type` currently comes from `SWAP/<source>`, `TRANSFER`, or the original Helius transaction `Type`.
 - Solana fees are currently attached as `fee.asset = "SOL"` only on the primary outbound row.
+- Multi-row Solana transfer/generic rows preserve `event_group_id` and `split_reason` in the IR so downstream tools can see that the rows belong to one signature.
 - Audit summaries flag Solana rows through `buildZeroUSDValueRow` and `buildSuspiciousAssetRow` when a mint-like asset string also has unresolved valuation.
 
 ## Current support boundary
@@ -61,7 +62,7 @@ Important named constructs:
 
 - Helius RPC plus enhanced parsing is the only Solana fetch path in the codebase.
 - Simple wallet-touching swap-like rows and transfer-like rows are normalized end to end.
-- Raw Helius rows preserve mint identity and source-backed symbol separately before normalization.
+- Raw Helius rows preserve mint identity and source-backed symbol separately before normalization, and normalized rows now preserve that split through `asset` plus optional `asset_canonical`.
 - Audit surfacing already highlights address-like Solana assets and zero-USD legs.
 
 ### Current-behavior-only checkpoints
@@ -86,4 +87,4 @@ Important named constructs:
 
 ## Notable current divergence from spec
 
-- The raw Solana path preserves canonical mint identity separately from symbol, but `normalizeHelius` collapses that pair into one normalized `asset` string. When Helius supplies a symbol, the normalized row keeps the symbol and no longer carries the mint. This is a concrete mismatch with the spec's canonical-identity preference and likely belongs in a future `docs/solana/REVIEW.md`.
+- No additional schema divergence remains around mint-versus-display identity: `asset_canonical` now preserves the mint when it differs from the displayed `asset`. The remaining conservative boundaries are unresolved valuation surfacing and ambiguous multi-row economic interpretation.

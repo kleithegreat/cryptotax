@@ -58,9 +58,11 @@
             "transfer_in",
             "transfer_out",
             "income",
-            "funding_payment"
+            "funding_payment",
+            "perp_open",
+            "perp_close"
           ],
-          "description": "Classified transaction type. 'swap' = disposal of one asset + acquisition of another. 'transfer_in'/'transfer_out' = movement between own wallets (non-taxable). 'income' = airdrops, staking rewards. 'funding_payment' = Hyperliquid perp funding (ordinary income/expense)."
+          "description": "Classified transaction type. 'swap' = disposal of one asset + acquisition of another. 'transfer_in'/'transfer_out' = movement between own wallets (non-taxable). 'income' = airdrops, staking rewards. 'funding_payment' = Hyperliquid perp funding (ordinary income/expense). 'perp_open'/'perp_close' quarantine perpetual fills from spot FIFO."
         },
         "wallet": {
           "type": "string",
@@ -94,6 +96,22 @@
         "raw_type": {
           "type": ["string", "null"],
           "description": "Original transaction type from the source, for debugging. e.g. 'Uniswap V3: Exact Input', 'Market Buy'."
+        },
+        "market": {
+          "type": ["string", "null"],
+          "description": "Optional source-backed market context when the economic row needs it. Currently used for Hyperliquid funding rows."
+        },
+        "event_group_id": {
+          "type": ["string", "null"],
+          "description": "Stable key that ties related normalized rows back to one source event or representation group."
+        },
+        "split_reason": {
+          "type": ["string", "null"],
+          "description": "Optional explanation for why one source event is represented as many normalized rows, such as API-fill granularity or deliberate wallet-touching leg preservation."
+        },
+        "closed_pnl": {
+          "type": ["string", "null"],
+          "description": "Exchange-reported realized PnL for `perp_close` rows."
         }
       }
     },
@@ -104,7 +122,11 @@
       "properties": {
         "asset": {
           "type": "string",
-          "description": "Token symbol. e.g. 'ETH', 'USDC', 'SOL'. Normalized to uppercase."
+          "description": "Normalized display asset string. This may be a symbol like 'USDC' or a source-backed identifier like a mint when no display symbol exists."
+        },
+        "asset_canonical": {
+          "type": ["string", "null"],
+          "description": "Optional canonical identity when it differs from the display asset, such as a Solana mint alongside display symbol 'USDC'."
         },
         "amount": {
           "type": "string",

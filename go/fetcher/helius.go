@@ -238,6 +238,7 @@ func convertSwap(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []Raw
 		Source:       types.SourceHelius,
 		Chain:        types.ChainSolana,
 		Wallet:       wallet,
+		EventGroupID: etx.Signature,
 		Asset:        sentAsset,
 		AssetSymbol:  sentSymbol,
 		Amount:       sentAmt,
@@ -258,17 +259,19 @@ func convertTransfer(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) [
 			continue
 		}
 		raw := RawTransaction{
-			ID:          etx.Signature,
-			Timestamp:   etx.Timestamp,
-			Source:      types.SourceHelius,
-			Chain:       types.ChainSolana,
-			Wallet:      wallet,
-			FromAddr:    tt.FromUserAccount,
-			ToAddr:      tt.ToUserAccount,
-			Asset:       tt.Mint,
-			AssetSymbol: heliusTransferSymbol(tt),
-			Amount:      formatTokenAmount(tt.TokenAmount),
-			RawType:     "TRANSFER",
+			ID:           etx.Signature,
+			Timestamp:    etx.Timestamp,
+			Source:       types.SourceHelius,
+			Chain:        types.ChainSolana,
+			Wallet:       wallet,
+			EventGroupID: etx.Signature,
+			SplitReason:  "wallet_touching_leg_preservation",
+			FromAddr:     tt.FromUserAccount,
+			ToAddr:       tt.ToUserAccount,
+			Asset:        tt.Mint,
+			AssetSymbol:  heliusTransferSymbol(tt),
+			Amount:       formatTokenAmount(tt.TokenAmount),
+			RawType:      "TRANSFER",
 		}
 		txs = append(txs, raw)
 	}
@@ -281,16 +284,18 @@ func convertTransfer(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) [
 			continue
 		}
 		raw := RawTransaction{
-			ID:        etx.Signature,
-			Timestamp: etx.Timestamp,
-			Source:    types.SourceHelius,
-			Chain:     types.ChainSolana,
-			Wallet:    wallet,
-			FromAddr:  nt.FromUserAccount,
-			ToAddr:    nt.ToUserAccount,
-			Asset:     "SOL",
-			Amount:    lamportsToSOL(nt.Amount),
-			RawType:   "TRANSFER",
+			ID:           etx.Signature,
+			Timestamp:    etx.Timestamp,
+			Source:       types.SourceHelius,
+			Chain:        types.ChainSolana,
+			Wallet:       wallet,
+			EventGroupID: etx.Signature,
+			SplitReason:  "wallet_touching_leg_preservation",
+			FromAddr:     nt.FromUserAccount,
+			ToAddr:       nt.ToUserAccount,
+			Asset:        "SOL",
+			Amount:       lamportsToSOL(nt.Amount),
+			RawType:      "TRANSFER",
 		}
 		txs = append(txs, raw)
 	}
@@ -306,17 +311,19 @@ func convertGeneric(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []
 			continue
 		}
 		raw := RawTransaction{
-			ID:          etx.Signature,
-			Timestamp:   etx.Timestamp,
-			Source:      types.SourceHelius,
-			Chain:       types.ChainSolana,
-			Wallet:      wallet,
-			FromAddr:    tt.FromUserAccount,
-			ToAddr:      tt.ToUserAccount,
-			Asset:       tt.Mint,
-			AssetSymbol: heliusTransferSymbol(tt),
-			Amount:      formatTokenAmount(tt.TokenAmount),
-			RawType:     etx.Type,
+			ID:           etx.Signature,
+			Timestamp:    etx.Timestamp,
+			Source:       types.SourceHelius,
+			Chain:        types.ChainSolana,
+			Wallet:       wallet,
+			EventGroupID: etx.Signature,
+			SplitReason:  "wallet_touching_leg_preservation",
+			FromAddr:     tt.FromUserAccount,
+			ToAddr:       tt.ToUserAccount,
+			Asset:        tt.Mint,
+			AssetSymbol:  heliusTransferSymbol(tt),
+			Amount:       formatTokenAmount(tt.TokenAmount),
+			RawType:      etx.Type,
 		}
 		txs = append(txs, raw)
 	}
@@ -326,16 +333,18 @@ func convertGeneric(etx heliusEnhancedTx, wallet, walletLower, feeSOL string) []
 			continue
 		}
 		raw := RawTransaction{
-			ID:        etx.Signature,
-			Timestamp: etx.Timestamp,
-			Source:    types.SourceHelius,
-			Chain:     types.ChainSolana,
-			Wallet:    wallet,
-			FromAddr:  nt.FromUserAccount,
-			ToAddr:    nt.ToUserAccount,
-			Asset:     "SOL",
-			Amount:    lamportsToSOL(nt.Amount),
-			RawType:   etx.Type,
+			ID:           etx.Signature,
+			Timestamp:    etx.Timestamp,
+			Source:       types.SourceHelius,
+			Chain:        types.ChainSolana,
+			Wallet:       wallet,
+			EventGroupID: etx.Signature,
+			SplitReason:  "wallet_touching_leg_preservation",
+			FromAddr:     nt.FromUserAccount,
+			ToAddr:       nt.ToUserAccount,
+			Asset:        "SOL",
+			Amount:       lamportsToSOL(nt.Amount),
+			RawType:      etx.Type,
 		}
 		txs = append(txs, raw)
 	}

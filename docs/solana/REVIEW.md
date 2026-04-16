@@ -6,15 +6,11 @@ This document tracks grounded gaps between `docs/solana/SPEC.md` and the current
 
 ## Open review items
 
-### Canonical mint identity is lost when a source-backed symbol exists
+### Canonical mint identity is preserved separately in the IR
 
-- Status: `needs_human_decision`
-- Issue type: `schema/contract gap`, `human-decision blocker`
-- Why this is a spec/implementation gap: `docs/solana/SPEC.md` says canonical Solana identity should prefer the mint and that any display symbol should remain separate metadata. The current normalized row keeps only one `asset` string, so the mint disappears as soon as Helius provides a symbol.
-- Current implementation evidence: `fetcher.RawTransaction` in `go/fetcher/fetcher.go` can carry both `Asset` and `AssetSymbol`. `convertSwap`, `convertTransfer`, and `convertGeneric` in `go/fetcher/helius.go` preserve that split. `normalizeHelius` in `go/normalize/normalize.go` then writes only `heliusDisplayAsset(...)` into `types.AssetAmount.Asset`, and `TestNormalizeHeliusUsesSourceBackedSymbolForDisplayAndPricing` in `go/normalize/normalize_test.go` freezes the current symbol-first behavior.
-- Desired direction implied by the spec: canonical mint identity should remain explicit across normalization, while any display symbol stays separate and optional.
-- What blocks resolution: the shared IR in `go/types/types.go` and `haskell/src/Types.hs` has only one `asset` field per leg, so keeping both identities requires an IR contract decision.
-- Smallest good next checkpoint: decide the IR contract for canonical-versus-display identity, then update Solana normalization to carry both.
+- Status: `done`
+- Issue type: resolved
+- Resolution: Decision Option B adopted — `types.AssetAmount` gained an optional `asset_canonical` field in Go and Haskell. `normalizeHelius` now writes the displayed symbol into `asset` and the raw mint into `asset_canonical` when they differ. `TestNormalizeHeliusAssetCanonicalPopulatedWhenSymbolPresent` and `TestNormalizeHeliusAssetCanonicalNilWhenNoSymbol` in `go/normalize/normalize_test.go` freeze the behavior. Downstream adoption remains incremental, but the Solana-specific schema gap is resolved.
 
 ### Unresolved mint-only valuation is encoded as `usd_value: "0"` plus audit heuristics
 
@@ -31,9 +27,9 @@ This document tracks grounded gaps between `docs/solana/SPEC.md` and the current
 - Status: `needs_human_verification`
 - Issue type: `support-boundary gap`, `human-verification blocker`
 - Why this is a spec/implementation gap: `docs/solana/SPEC.md` says economically meaningful legs should be preserved conservatively, even when one transaction contains many internal moves. Current output is frozen for representative cases, but the code cannot yet show which rows are intended conservative legs and which are parser artifacts.
-- Current implementation evidence: `convertSwap` in `go/fetcher/helius.go` chooses one wallet-touching outbound leg and one inbound leg. `convertTransfer` and `convertGeneric` emit one row per wallet-touching transfer. `attachFeeToPrimaryHeliusRow` assigns the full fee to the first outbound row only. `docs/known-transactions.md` documents `sol-dflow-swap` and `sol-addresslike-mint` as pending human review because the resulting rows may be same-asset routing artifacts or one transaction exploded into many ambiguous rows.
+- Current implementation evidence: `convertSwap` in `go/fetcher/helius.go` chooses one wallet-touching outbound leg and one inbound leg. `convertTransfer` and `convertGeneric` emit one row per wallet-touching transfer and now preserve `event_group_id = signature` plus `split_reason = "wallet_touching_leg_preservation"`. `attachFeeToPrimaryHeliusRow` assigns the full fee to the first outbound row only. `docs/known-transactions.md` documents `sol-dflow-swap` and `sol-addresslike-mint` as pending human review because the resulting rows may still be same-asset routing artifacts or one transaction exploded into many ambiguous rows.
 - Desired direction implied by the spec: preserve conservative visibility without making same-asset SOL rows or large row explosions look like settled economic semantics.
-- What blocks resolution: the representative real-wallet Solana cases still need human verification, and any durable fix likely depends on the IR decision about grouping or representation metadata.
+- What blocks resolution: the representative real-wallet Solana cases still need human verification. The IR now carries `event_group_id` and `split_reason`, but human review still has to decide whether the current row explosion is acceptable or should collapse further.
 - Smallest good next checkpoint: finish human review of the documented `sol-dflow-swap` and `sol-addresslike-mint` exemplars so the repo can separate acceptable conservative output from parser artifacts.
 
 ## Non-goals / intentionally narrow boundaries

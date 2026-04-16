@@ -355,6 +355,8 @@ func TestNormalizeHyperliquidPerpOpenEmitsPerpOpenType(t *testing.T) {
 		Source:        types.SourceHyperliquid,
 		Chain:         types.ChainHyperliquid,
 		Wallet:        "0xwallet",
+		EventGroupID:  "hyperliquid:fill:fill-open-long",
+		SplitReason:   "api_fill_granularity",
 		Asset:         "BTC",
 		Amount:        "0.0004",
 		USDPrice:      "124825",
@@ -378,6 +380,12 @@ func TestNormalizeHyperliquidPerpOpenEmitsPerpOpenType(t *testing.T) {
 	if tx.ClosedPnl != nil {
 		t.Fatalf("expected no closed_pnl on open, got %q", *tx.ClosedPnl)
 	}
+	if tx.EventGroupID == nil || *tx.EventGroupID != "hyperliquid:fill:fill-open-long" {
+		t.Fatalf("expected event_group_id %q, got %#v", "hyperliquid:fill:fill-open-long", tx.EventGroupID)
+	}
+	if tx.SplitReason == nil || *tx.SplitReason != "api_fill_granularity" {
+		t.Fatalf("expected split_reason %q, got %#v", "api_fill_granularity", tx.SplitReason)
+	}
 }
 
 func TestNormalizeHyperliquidPerpCloseEmitsPerpCloseWithClosedPnl(t *testing.T) {
@@ -389,6 +397,8 @@ func TestNormalizeHyperliquidPerpCloseEmitsPerpCloseWithClosedPnl(t *testing.T) 
 		Source:        types.SourceHyperliquid,
 		Chain:         types.ChainHyperliquid,
 		Wallet:        "0xwallet",
+		EventGroupID:  "hyperliquid:fill:fill-close-short",
+		SplitReason:   "api_fill_granularity",
 		Asset:         "SOL",
 		Amount:        "10.5",
 		USDPrice:      "200",
@@ -414,6 +424,45 @@ func TestNormalizeHyperliquidPerpCloseEmitsPerpCloseWithClosedPnl(t *testing.T) 
 	}
 	if *tx.ClosedPnl != "-42.50" {
 		t.Fatalf("expected closed_pnl %q, got %q", "-42.50", *tx.ClosedPnl)
+	}
+	if tx.EventGroupID == nil || *tx.EventGroupID != "hyperliquid:fill:fill-close-short" {
+		t.Fatalf("expected event_group_id %q, got %#v", "hyperliquid:fill:fill-close-short", tx.EventGroupID)
+	}
+	if tx.SplitReason == nil || *tx.SplitReason != "api_fill_granularity" {
+		t.Fatalf("expected split_reason %q, got %#v", "api_fill_granularity", tx.SplitReason)
+	}
+}
+
+func TestNormalizeHyperliquidFundingCarriesMarketContext(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:           "0x0000000000000000000000000000000000000000000000000000000000000000",
+		Timestamp:    time.Date(2025, 10, 7, 0, 0, 0, 0, time.UTC).Unix(),
+		Source:       types.SourceHyperliquid,
+		Chain:        types.ChainHyperliquid,
+		Wallet:       "0xwallet",
+		Asset:        "BTC",
+		Market:       "BTC",
+		Amount:       "-0.168095",
+		RawType:      "funding",
+		EventGroupID: "hyperliquid:funding:0xwallet:1759795200000:BTC:-0.168095",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxFundingPayment {
+		t.Fatalf("expected tx_type %q, got %q", types.TxFundingPayment, tx.TxType)
+	}
+	if tx.Market == nil || *tx.Market != "BTC" {
+		t.Fatalf("expected market %q, got %#v", "BTC", tx.Market)
+	}
+	if tx.EventGroupID == nil || *tx.EventGroupID != "hyperliquid:funding:0xwallet:1759795200000:BTC:-0.168095" {
+		t.Fatalf("unexpected event_group_id: %#v", tx.EventGroupID)
+	}
+	if tx.Sent == nil || tx.Sent.Asset != "USDC" {
+		t.Fatalf("expected sent USDC funding leg, got %#v", tx.Sent)
 	}
 }
 

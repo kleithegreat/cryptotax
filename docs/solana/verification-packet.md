@@ -34,7 +34,7 @@ For each case:
 2. Is the swap classification correct per the explorer instruction trace?
 3. Should the zero USD valuation stand as the permanent conservative stance (no supported pricing path for this token), or does a valuation source need to be adopted?
 
-**Support-boundary upgrade unlocked:** Resolving this case grounds mint-identity-vs-symbol handling for pump.fun-sourced tokens and establishes whether zero-USD for unpriced mints is acceptable or a gap to close. Feeds into `solana.identity_valuation_support_boundary_upgrade` plus the review items `Canonical mint identity is lost when a source-backed symbol exists` and `Unresolved mint-only valuation is encoded as usd_value "0" plus audit heuristics` in `docs/solana/REVIEW.md`.
+**Support-boundary upgrade unlocked:** Resolving this case grounds mint identity for pump.fun-sourced tokens and establishes whether zero-USD for unpriced mints is acceptable or a gap to close. The `asset_canonical` schema checkpoint is already implemented; this case now feeds into `solana.identity_valuation_support_boundary_upgrade` plus the remaining valuation-surfacing review work in `docs/solana/REVIEW.md`.
 
 ---
 
@@ -81,7 +81,7 @@ The explorer instruction trace should clarify whether funds were routed through 
 3. Which of the 10 rows represent real economic legs with value, and which are zero-amount bookkeeping artifacts?
 4. Is the 10-row explosion an acceptable conservative representation, or should it collapse into fewer economic rows?
 
-**Support-boundary upgrade unlocked:** This is the hardest of the three cases. Resolving it grounds multi-leg transaction handling, validates or rejects the current row-explosion behavior, and establishes identity for the most common address-like mint in the dataset. Feeds into all three Solana REVIEW.md gaps and into `solana.identity_valuation_support_boundary_upgrade`.
+**Support-boundary upgrade unlocked:** This is the hardest of the three cases. Resolving it grounds multi-leg transaction handling, validates or rejects the current row-explosion behavior, and establishes identity for the most common address-like mint in the dataset. The `asset_canonical` plus `event_group_id` / `split_reason` plumbing is already in place; this case now feeds into the remaining Solana review gaps around unresolved valuation and ambiguous multi-row interpretation, plus `solana.identity_valuation_support_boundary_upgrade`.
 
 ---
 
@@ -89,13 +89,13 @@ The explorer instruction trace should clarify whether funds were routed through 
 
 | Case | Identity | Valuation | Econ. interpretation | Fixture exists | Primary unlock |
 | --- | --- | --- | --- | --- | --- |
-| `sol-pumpfun-zero-usd` | blocker | blocker | - | yes | mint-vs-symbol handling, zero-USD policy |
+| `sol-pumpfun-zero-usd` | blocker | blocker | - | yes | mint identity, zero-USD policy |
 | `sol-dflow-swap` | - | - | blocker | no | same-asset routing artifact policy |
 | `sol-addresslike-mint` | blocker | blocker | blocker | no | multi-leg handling, address-like mint ID |
 
 ## Relationship to TASK_DAG
 
-These three cases are the Solana subset of `verification.expand_human_verified_exemplars` (`needs_human_verification`). Human resolution of all three is required before `solana.identity_valuation_support_boundary_upgrade` can unblock, which in turn feeds into `core.accounting_support_upgrade`.
+These three cases are the Solana subset of `verification.expand_human_verified_exemplars` (`needs_human_verification`). Human resolution of all three is still required before `solana.identity_valuation_support_boundary_upgrade` can unblock. The earlier IR schema checkpoint (`decision.ir_contract_refinement`) and core accounting checkpoint (`core.accounting_support_upgrade`) are already done; the remaining Solana work is evidence-backed support-boundary cleanup, not baseline contract plumbing.
 
 ## After human review
 
