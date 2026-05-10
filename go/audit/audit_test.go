@@ -53,6 +53,23 @@ func TestFilterPayloadMatchesFeeAssetCaseInsensitive(t *testing.T) {
 	}
 }
 
+func TestFilterPayloadMatchesCanonicalAsset(t *testing.T) {
+	t.Parallel()
+
+	canonical := "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	payload := testPayload()
+	payload.Transactions[2].Received.AssetCanonical = &canonical
+
+	filtered := FilterPayload(payload, Filters{Asset: canonical})
+
+	if len(filtered.Transactions) != 1 {
+		t.Fatalf("expected 1 canonical asset match, got %d", len(filtered.Transactions))
+	}
+	if filtered.Transactions[0].ID != "tx-1" || filtered.Transactions[0].Wallet != "0xbbb" {
+		t.Fatalf("unexpected transaction after canonical asset filtering: %#v", filtered.Transactions[0])
+	}
+}
+
 func TestBuildSummaryAggregatesExactAssetTotals(t *testing.T) {
 	t.Parallel()
 
@@ -338,6 +355,35 @@ func TestWriteCaptureArtifactsWritesSkippedRowsSidecar(t *testing.T) {
 	}
 	if loaded[1].TxID != "bad-tx-2" || loaded[1].RawType != "" {
 		t.Fatalf("unexpected second skipped row: %#v", loaded[1])
+	}
+}
+
+func TestWriteCaptureArtifactsRemovesStaleSkippedRowsSidecar(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	outputPath := filepath.Join(dir, "audit", "normalized.json")
+	payload := testPayload()
+	commandLine := "nix run .#audit -- capture audit/normalized.json --eth-wallet 0xaaa"
+	skipped := []normalize.SkippedRow{{
+		TxID:   "bad-tx",
+		Source: types.SourceHelius,
+		Chain:  types.ChainSolana,
+		Reason: "missing wallet on raw transaction",
+	}}
+
+	if err := WriteCaptureArtifacts(outputPath, payload, commandLine, skipped); err != nil {
+		t.Fatalf("first WriteCaptureArtifacts returned error: %v", err)
+	}
+	if _, err := os.Stat(outputPath + ".skipped.json"); err != nil {
+		t.Fatalf("expected skipped rows sidecar after first capture: %v", err)
+	}
+
+	if err := WriteCaptureArtifacts(outputPath, payload, commandLine, nil); err != nil {
+		t.Fatalf("second WriteCaptureArtifacts returned error: %v", err)
+	}
+	if _, err := os.Stat(outputPath + ".skipped.json"); !os.IsNotExist(err) {
+		t.Fatalf("expected stale skipped rows sidecar to be removed, stat error: %v", err)
 	}
 }
 

@@ -48,6 +48,7 @@ Important named constructs:
 - `handlePerpClose` uses `txClosedPnl` to emit a `PerpPnlEntry` in `prPerpPnl`. If `closed_pnl` is absent, an error is recorded.
 - `TransferIn` and `TransferOut` rows currently leave the accumulator unchanged.
 - `render8949CSV` renders only `prGainLosses` to CSV.
+- The CSV renderer quotes source-backed text fields that contain commas, quotes, or newlines so report rows remain parseable.
 
 ## Outputs / side effects
 
@@ -63,7 +64,7 @@ Important named constructs:
 ### Implemented behavior
 
 - Exact decimal math stays in `Rational` form through `parseDecimal`, `TokenAmount`, and `USD`.
-- FIFO ordering lives in `Lot.acquire`, `Lot.dispose`, and `consumeLots`.
+- FIFO ordering lives in `Lot.acquire`, `Lot.dispose`, and `consumeLots`; zero-amount acquisitions are ignored and fully consumed asset queues are removed from the final map.
 - `mkGain` and `holdingPeriod` produce per-lot disposal rows with exact basis and proceeds allocation.
 - The local golden fixture in `haskell/testdata/basic-buy-sell-transfer.json` and `haskell/testdata/basic-buy-sell-transfer-8949.csv` is the strongest current end-to-end proof of supported output.
 

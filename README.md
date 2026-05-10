@@ -170,7 +170,7 @@ cryptotax/
 ## Known limitations
 
 - EVM swaps and bridges are not fully reconstructed from per-address Etherscan rows yet; inbound legs are treated conservatively instead of guessed into taxable income.
-- Hyperliquid perp activity is still approximated onto the current IR; positive funding receipts are modeled as ordinary income plus USDC acquisitions, while negative funding expenses are preserved but still surfaced as unsupported for final tax output.
+- Hyperliquid perp activity is still approximated onto the current IR; positive funding receipts are modeled as ordinary income plus USDC acquisitions, while negative funding expenses are emitted to `funding_expenses.csv` as informational supplemental output without consuming USDC lots or making a broader tax-semantics claim.
 - Source APIs can omit metadata or use token symbols that do not yet map cleanly to historical price lookups. Those rows fall back to `"0"` USD values instead of inventing prices.
 
 ## Disclaimer

@@ -27,13 +27,16 @@ empty = Map.empty
 -- | Record an acquisition. Appends a new lot to the BACK of the queue (FIFO).
 acquire :: AssetSymbol -> UTCTime -> TokenAmount -> USD -> LotQueue -> LotQueue
 acquire asset timestamp amount costBasisUSD queue =
-  let lot = TaxLot
-        { lotAsset       = asset
-        , lotAcquired    = timestamp
-        , lotRemaining   = amount
-        , lotCostPerUnit = if amount == 0 then 0 else unUSD costBasisUSD / unTokens amount
-        }
-  in Map.insertWith (\_ old -> old ++ [lot]) asset [lot] queue
+  if amount == 0
+    then queue
+    else
+      let lot = TaxLot
+            { lotAsset       = asset
+            , lotAcquired    = timestamp
+            , lotRemaining   = amount
+            , lotCostPerUnit = unUSD costBasisUSD / unTokens amount
+            }
+      in Map.insertWith (\_ old -> old ++ [lot]) asset [lot] queue
 
 -- | Record a disposal. Pops lots from the FRONT (FIFO) and returns gain/loss
 -- records plus the updated queue. Errors if insufficient lots exist.
@@ -43,7 +46,7 @@ dispose disp queue =
       lots  = Map.findWithDefault [] asset queue
   in case consumeLots disp (dispAmount disp) lots [] of
        Left err             -> Left err
-       Right (gains, lots') -> Right (gains, Map.insert asset lots' queue)
+       Right (gains, lots') -> Right (gains, updateLots asset lots' queue)
 
 -- | Walk lots FIFO, consuming units until the disposal is satisfied.
 -- The Disposal is never mutated; @toConsume@ tracks remaining units.
@@ -57,6 +60,7 @@ consumeLots _disp toConsume [] acc
                           <> ": need " <> showR (unTokens toConsume) <> " more units"
 consumeLots disp toConsume (lot : lots) acc
   | toConsume <= 0 = Right (reverse acc, lot : lots)
+  | lotRemaining lot <= 0 = consumeLots disp toConsume lots acc
   | lotRemaining lot <= toConsume =
       -- Consume the entire lot
       let consumed  = lotRemaining lot
@@ -103,12 +107,25 @@ totalUnits :: AssetSymbol -> LotQueue -> TokenAmount
 totalUnits asset queue =
   sum $ map lotRemaining $ Map.findWithDefault [] asset queue
 
+updateLots :: AssetSymbol -> [TaxLot] -> LotQueue -> LotQueue
+updateLots asset lots queue
+  | null lots  = Map.delete asset queue
+  | otherwise  = Map.insert asset lots queue
+
 -- | Render a Rational for error messages.
 showR :: Rational -> Text
 showR r =
-  let n = numerator r
-      d = denominator r
+  let sign = if r < 0 then "-" else ""
+      r' = abs r
+      n = numerator r'
+      d = denominator r'
       (q, rem') = n `divMod` d
   in if rem' == 0
-     then T.pack (show q)
-     else T.pack (show q) <> "." <> T.pack (show (abs (rem' * 1000000 `div` d)))
+     then sign <> T.pack (show q)
+     else sign <> T.pack (show q) <> "." <> trimTrailingZeroes (pad6 (T.pack (show (rem' * 1000000 `div` d))))
+
+pad6 :: Text -> Text
+pad6 t = T.replicate (max 0 (6 - T.length t)) "0" <> t
+
+trimTrailingZeroes :: Text -> Text
+trimTrailingZeroes = T.dropWhileEnd (== '0')

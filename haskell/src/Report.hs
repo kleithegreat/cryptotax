@@ -21,7 +21,7 @@ render8949CSV gains =
 
 renderRow :: GainLoss -> Text
 renderRow gl =
-  T.intercalate ","
+  csvRow
     [ renderDescription gl
     , formatDate (glAcquired gl)
     , formatDate (glDisposed gl)
@@ -77,7 +77,7 @@ renderIncomeCSV entries =
 
 renderIncomeRow :: IncomeEntry -> Text
 renderIncomeRow ii =
-  T.intercalate ","
+  csvRow
     [ formatDate (iiTimestamp ii)
     , iiTxId ii
     , unAsset (iiAsset ii)
@@ -94,7 +94,7 @@ renderFundingExpenseCSV expenses =
 
 renderFundingRow :: FundingExpense -> Text
 renderFundingRow fe =
-  T.intercalate ","
+  csvRow
     [ formatDate (feTimestamp fe)
     , feTxId fe
     , unAsset (feAsset fe)
@@ -113,7 +113,7 @@ renderPerpPnlCSV entries =
 
 renderPerpRow :: PerpPnlEntry -> Text
 renderPerpRow pp =
-  T.intercalate ","
+  csvRow
     [ formatDate (ppTimestamp pp)
     , ppTxId pp
     , unAsset (ppAsset pp)
@@ -121,3 +121,13 @@ renderPerpRow pp =
     , ppDirection pp
     , renderUSD (ppClosedPnl pp)
     ]
+
+csvRow :: [Text] -> Text
+csvRow = T.intercalate "," . map csvField
+
+csvField :: Text -> Text
+csvField field
+  | T.any needsQuoting field = "\"" <> T.replace "\"" "\"\"" field <> "\""
+  | otherwise = field
+  where
+    needsQuoting c = c == ',' || c == '"' || c == '\r' || c == '\n'

@@ -39,7 +39,7 @@ Important named constructs:
 ## Data flow
 
 - `buildPayload` in `go/cmd/main.go` creates `fetcher.NewHelius` for each `--sol-wallet`.
-- `Helius.Fetch` first calls `getSignatures`, which paginates `getSignaturesForAddress` and drops signatures whose RPC result contains a non-nil `Err`.
+- `Helius.Fetch` first calls `getSignatures`, which paginates `getSignaturesForAddress`, returns explicit JSON-RPC errors instead of treating them as empty results, and drops signatures whose RPC result contains a non-nil `Err`.
 - `parseEnhanced` then posts batched signature lists to the Helius enhanced-transactions endpoint. `shouldFallbackHeliusEnhanced` triggers a retry against `LegacyEnhancedURL` for the current 530 and 1016 failure shapes.
 - `convertHeliusTx` dispatches on `heliusEnhancedTx.Type`.
 - `convertSwap` produces one `fetcher.RawTransaction` with `Asset` and `Asset2` for the wallet-touching sent and received legs. It preserves the raw mint in `Asset` or `Asset2` and carries any source-backed symbol separately in `AssetSymbol` or `Asset2Symbol`.
@@ -54,7 +54,7 @@ Important named constructs:
 - `raw_type` currently comes from `SWAP/<source>`, `TRANSFER`, or the original Helius transaction `Type`.
 - Solana fees are currently attached as `fee.asset = "SOL"` only on the primary outbound row.
 - Multi-row Solana transfer/generic rows preserve `event_group_id` and `split_reason` in the IR so downstream tools can see that the rows belong to one signature.
-- Audit summaries flag Solana rows through `buildZeroUSDValueRow` and `buildSuspiciousAssetRow` when a mint-like asset string also has unresolved valuation.
+- Audit summaries flag Solana rows through `buildZeroUSDValueRow` and `buildSuspiciousAssetRow` when a mint-like asset string also has unresolved valuation. Audit filtering can match either the displayed `asset` value or the optional `asset_canonical` mint.
 
 ## Current support boundary
 
@@ -83,7 +83,7 @@ Important named constructs:
 - `convertSwap` chooses one wallet-touching outbound leg and one wallet-touching inbound leg. It does not model richer routing paths or internal account churn.
 - `normalizeHelius` defaults inbound non-swap rows to `transfer_in`, not `income`.
 - `formatTokenAmount` renders Helius `TokenAmount` through a `float64` path and emits 9 decimal places.
-- `price.Provider` only knows the small symbol map in `coingeckoIDs`, so mint-only Solana assets usually remain at `usd_value: "0"`.
+- `price.Provider` only knows the small symbol map in `coingeckoIDs`, so mint-only Solana assets usually remain at `usd_value: "0"`. CoinGecko 429 responses are retried once by default and then surfaced as lookup errors rather than recursing indefinitely.
 
 ## Notable current divergence from spec
 

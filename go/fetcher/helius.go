@@ -18,6 +18,7 @@ import (
 type Helius struct {
 	APIKey            string
 	Client            *http.Client
+	RPCURL            string
 	EnhancedURL       string
 	LegacyEnhancedURL string
 }
@@ -32,6 +33,7 @@ func NewHelius(apiKey string) *Helius {
 	return &Helius{
 		APIKey:            apiKey,
 		Client:            &http.Client{Timeout: 30 * time.Second},
+		RPCURL:            "https://mainnet.helius-rpc.com/",
 		EnhancedURL:       "https://api-mainnet.helius-rpc.com/v0/transactions",
 		LegacyEnhancedURL: "https://api.helius.xyz/v0/transactions",
 	}
@@ -74,7 +76,7 @@ func (h *Helius) Fetch(wallet string) ([]RawTransaction, error) {
 func (h *Helius) getSignatures(wallet string) ([]string, error) {
 	var allSigs []string
 	var before string
-	rpcURL := fmt.Sprintf("https://mainnet.helius-rpc.com/?api-key=%s", h.APIKey)
+	rpcURL := h.rpcURL()
 
 	for {
 		params := map[string]interface{}{
@@ -101,9 +103,13 @@ func (h *Helius) getSignatures(wallet string) ([]string, error) {
 				Signature string `json:"signature"`
 				Err       any    `json:"err"`
 			} `json:"result"`
+			Error *heliusRPCError `json:"error"`
 		}
 		if err := json.Unmarshal(respBody, &result); err != nil {
 			return nil, fmt.Errorf("parsing signatures response: %w", err)
+		}
+		if result.Error != nil {
+			return nil, fmt.Errorf("getSignaturesForAddress RPC error %d: %s", result.Error.Code, result.Error.Message)
 		}
 
 		for _, sig := range result.Result {
@@ -121,6 +127,23 @@ func (h *Helius) getSignatures(wallet string) ([]string, error) {
 	}
 
 	return allSigs, nil
+}
+
+func (h *Helius) rpcURL() string {
+	baseURL := h.RPCURL
+	if baseURL == "" {
+		baseURL = "https://mainnet.helius-rpc.com/"
+	}
+	separator := "?"
+	if strings.Contains(baseURL, "?") {
+		separator = "&"
+	}
+	return fmt.Sprintf("%s%sapi-key=%s", baseURL, separator, h.APIKey)
+}
+
+type heliusRPCError struct {
+	Code    int    `json:"code"`
+	Message string `json:"message"`
 }
 
 // Enhanced Transactions API response types

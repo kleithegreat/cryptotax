@@ -17,6 +17,7 @@ Audit tooling does **not** make unsupported tax semantics correct by itself.
 
 - capture should preserve the exact normalized payload under review
 - filtering should make representative cases easy to isolate without mutating them
+- asset filtering should support both displayed asset identity and preserved canonical identity where the IR provides it
 - summaries should surface unresolved or suspicious patterns early
 - outputs should be stable and machine-readable enough for regression tests and review workflows
 

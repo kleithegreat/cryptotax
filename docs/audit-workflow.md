@@ -21,6 +21,8 @@ What this does:
 
 - writes normalized JSON to `audit/normalized.json`
 - writes the exact re-run command to `audit/normalized.json.command`
+- writes skipped normalization rows to `audit/normalized.json.skipped.json` when
+  any rows are skipped; a later clean capture removes a stale skipped sidecar
 
 Use the same wallet flags and input files that you want the audit to represent.
 If you only need one source, omit the other flags.
@@ -55,7 +57,8 @@ Available filters:
 - `--from-timestamp`: lower bound on normalized RFC3339 UTC `timestamp`
 - `--to-timestamp`: upper bound on normalized RFC3339 UTC `timestamp`
 - `--wallet`: exact match on normalized `wallet`
-- `--asset`: matches `sent.asset`, `received.asset`, or `fee.asset`
+- `--asset`: matches `sent.asset`, `received.asset`, `fee.asset`, or any
+  corresponding `asset_canonical` field
 - `--raw-type`: exact match on normalized `raw_type`
 
 Notes:

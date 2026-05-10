@@ -2,6 +2,7 @@ package audit
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math/big"
 	"os"
@@ -125,15 +126,20 @@ func WriteCaptureArtifacts(outputPath string, payload types.TxPayload, commandLi
 		return fmt.Errorf("write command file %s: %w", commandPath, err)
 	}
 
-	if len(skipped) > 0 {
-		skippedJSON, err := json.MarshalIndent(skipped, "", "  ")
-		if err != nil {
-			return fmt.Errorf("marshal skipped rows: %w", err)
+	skippedPath := outputPath + ".skipped.json"
+	if len(skipped) == 0 {
+		if err := os.Remove(skippedPath); err != nil && !errors.Is(err, os.ErrNotExist) {
+			return fmt.Errorf("remove stale skipped rows %s: %w", skippedPath, err)
 		}
-		skippedPath := outputPath + ".skipped.json"
-		if err := os.WriteFile(skippedPath, append(skippedJSON, '\n'), 0o644); err != nil {
-			return fmt.Errorf("write skipped rows %s: %w", skippedPath, err)
-		}
+		return nil
+	}
+
+	skippedJSON, err := json.MarshalIndent(skipped, "", "  ")
+	if err != nil {
+		return fmt.Errorf("marshal skipped rows: %w", err)
+	}
+	if err := os.WriteFile(skippedPath, append(skippedJSON, '\n'), 0o644); err != nil {
+		return fmt.Errorf("write skipped rows %s: %w", skippedPath, err)
 	}
 
 	return nil
@@ -300,7 +306,13 @@ func matchesFilters(tx types.Transaction, filters Filters) bool {
 
 func transactionHasAsset(tx types.Transaction, asset string) bool {
 	for _, amount := range []*types.AssetAmount{tx.Sent, tx.Received, tx.Fee} {
-		if amount != nil && strings.EqualFold(amount.Asset, asset) {
+		if amount == nil {
+			continue
+		}
+		if strings.EqualFold(amount.Asset, asset) {
+			return true
+		}
+		if amount.AssetCanonical != nil && strings.EqualFold(*amount.AssetCanonical, asset) {
 			return true
 		}
 	}

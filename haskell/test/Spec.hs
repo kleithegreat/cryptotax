@@ -20,7 +20,7 @@ import           Types
 import           Lot             (LotQueue)
 import qualified Lot
 import           GainLoss        (processTransactions, ProcessResult(..))
-import           Report          (render8949CSV)
+import           Report          (render8949CSV, renderIncomeCSV, renderPerpPnlCSV)
 
 -- ---------------------------------------------------------------------------
 -- Generators
@@ -56,7 +56,10 @@ genBuysAndSell = do
   n <- choose (1, 5)
   buys <- vectorOf n $ (,) <$> genPositiveAmount <*> genPrice
   let totalBought = sum (map fst buys)
-  fraction <- choose (1, 100 :: Integer)
+  fraction <- frequency
+    [ (1, pure (100 :: Integer))
+    , (4, choose (1, 99 :: Integer))
+    ]
   let sellAmt = totalBought * (fraction % 100)
   pure (asset, buys, sellAmt)
 
@@ -176,7 +179,7 @@ prop_gainFormula = forAll genBuysAndSell $ \(asset, buys, sellAmt) ->
 prop_holdingPeriod :: Property
 prop_holdingPeriod = forAll genPositiveAmount $ \amt ->
   forAll genPrice $ \px ->
-    forAll (choose (1, 1000)) $ \(days :: Int) ->
+    forAll genHoldingDays $ \(days :: Int) ->
       let buyTime  = UTCTime (fromGregorian 2022 1 1) 0
           sellTime = addUTCTime (fromIntegral days * nominalDay) buyTime
           queue    = Lot.acquire "ETH" buyTime (TokenAmount amt) (USD (amt * px)) Lot.empty
@@ -187,7 +190,12 @@ prop_holdingPeriod = forAll genPositiveAmount $ \amt ->
          case Lot.dispose disp queue of
            Left _  -> property False
            Right (gains, _) ->
-             property $ all (\g -> glPeriod g == expected) gains
+              property $ all (\g -> glPeriod g == expected) gains
+  where
+    genHoldingDays = frequency
+      [ (1, choose (1, 365 :: Int))
+      , (1, choose (366, 1000 :: Int))
+      ]
 
 -- ---------------------------------------------------------------------------
 -- 8. No phantom gains on empty input
@@ -362,14 +370,14 @@ prop_dustPrecision = once $
       px  = 3000 :: Rational
       queue = Lot.acquire "ETH" t1 (TokenAmount dust) (USD (dust * px)) Lot.empty
       disp  = Disposal "ETH" t2 (TokenAmount dust) (USD (dust * px * 2)) 0
-  in case Lot.dispose disp queue of
-       Left _  -> property False
-       Right (gains, queue') ->
-         conjoin
-           [ Lot.totalUnits "ETH" queue' === 0
-           , property (length gains == 1)
-           , glAmount (head gains) === TokenAmount dust
-           ]
+    in case Lot.dispose disp queue of
+         Left _  -> property False
+         Right (gains, queue') -> case gains of
+          [gain] -> conjoin
+            [ Lot.totalUnits "ETH" queue' === 0
+            , glAmount gain === TokenAmount dust
+            ]
+          _ -> counterexample ("expected 1 gain, got " ++ show (length gains)) False
 
 -- ---------------------------------------------------------------------------
 -- 15. Zero-value transactions don't corrupt the queue
@@ -382,9 +390,32 @@ prop_zeroValueSafe = forAll genPositiveAmount $ \amt ->
         queue0 = Lot.acquire "ETH" t (TokenAmount amt) (USD (amt * px)) Lot.empty
         queue1 = Lot.acquire "ETH" t 0 0 queue0
     in conjoin
-         [ Lot.totalUnits "ETH" queue1 === TokenAmount amt
-         , Lot.totalCostBasis queue1 === USD (amt * px)
+          [ Lot.totalUnits "ETH" queue1 === TokenAmount amt
+          , Lot.totalCostBasis queue1 === USD (amt * px)
+          ]
+
+prop_zeroAcquisitionDoesNotEmitGain :: Property
+prop_zeroAcquisitionDoesNotEmitGain = once $
+  let t0 = UTCTime (fromGregorian 2024 1 1) 0
+      t1 = UTCTime (fromGregorian 2024 6 1) 0
+      queue = Lot.acquire "ETH" t0 0 0 $
+              Lot.acquire "ETH" t0 1 1000 Lot.empty
+      disp = Disposal "ETH" t1 1 2000 0
+  in case Lot.dispose disp queue of
+       Left err -> counterexample (T.unpack err) False
+       Right (gains, queue') -> conjoin
+         [ property (length gains == 1)
+         , property (all ((/= 0) . glAmount) gains)
+         , property (Map.notMember "ETH" queue')
          ]
+
+prop_insufficientLotErrorPadsSmallDecimals :: Property
+prop_insufficientLotErrorPadsSmallDecimals = once $
+  let t = UTCTime (fromGregorian 2024 1 1) 0
+      disp = Disposal "ETH" t (TokenAmount (1 % 1000000)) 0 0
+  in case Lot.dispose disp Lot.empty of
+       Right _ -> property False
+       Left err -> property ("0.000001" `T.isInfixOf` err)
 
 -- ---------------------------------------------------------------------------
 -- 16. Positive funding creates ordinary income and a USDC lot
@@ -401,14 +432,15 @@ prop_positiveFundingCreatesIncomeAndLot = once $
         , txFee = Nothing, txRawType = Just "funding", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
-  in conjoin
-        [ property (null (prErrors result))
-        , property (length (prIncome result) == 1)
-        , iiUSDValue (head (prIncome result)) === USD (469878 % 250000)
-        , iiAsset (head (prIncome result)) === "USDC"
-        , Lot.totalUnits "USDC" (prFinalQueue result) === TokenAmount (469878 % 250000)
-        , Lot.totalCostBasis (prFinalQueue result) === USD (469878 % 250000)
-        ]
+  in case prIncome result of
+       [income] -> conjoin
+         [ property (null (prErrors result))
+         , iiUSDValue income === USD (469878 % 250000)
+         , iiAsset income === "USDC"
+         , Lot.totalUnits "USDC" (prFinalQueue result) === TokenAmount (469878 % 250000)
+         , Lot.totalCostBasis (prFinalQueue result) === USD (469878 % 250000)
+         ]
+       entries -> counterexample ("expected 1 income entry, got " ++ show (length entries)) False
 
 -- ---------------------------------------------------------------------------
 -- 17. Negative funding produces a structured FundingExpense (not an error)
@@ -425,14 +457,15 @@ prop_negativeFundingCreatesStructuredExpense = once $
         , txFee = Nothing, txRawType = Just "funding", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
-  in conjoin
-       [ property (null (prErrors result))
-       , property (null (prIncome result))
-       , Lot.totalUnits "USDC" (prFinalQueue result) === 0
-       , property (length (prFundingExpenses result) == 1)
-       , feUSDValue (head (prFundingExpenses result)) === USD (168095 % 1000000)
-       , feAsset (head (prFundingExpenses result)) === "USDC"
-       ]
+  in case prFundingExpenses result of
+       [expense] -> conjoin
+         [ property (null (prErrors result))
+         , property (null (prIncome result))
+         , Lot.totalUnits "USDC" (prFinalQueue result) === 0
+         , feUSDValue expense === USD (168095 % 1000000)
+         , feAsset expense === "USDC"
+         ]
+       entries -> counterexample ("expected 1 funding expense, got " ++ show (length entries)) False
 
 -- ---------------------------------------------------------------------------
 -- 18. Perp open does not create lots (quarantined from spot FIFO)
@@ -471,16 +504,17 @@ prop_perpCloseUsesClosedPnl = once $
         , txFee = Nothing, txRawType = Just "Close Long", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Just "42.50"
         }
       result = processTransactions [tx]
-  in conjoin
-       [ property (null (prErrors result))
-       , property (null (prGainLosses result))
-       , property (length (prPerpPnl result) == 1)
-       , ppClosedPnl (head (prPerpPnl result)) === USD (85 % 2)
-       , ppAsset (head (prPerpPnl result)) === "SOL"
-       , ppDirection (head (prPerpPnl result)) === "Close Long"
-       -- Perp close does NOT consume spot lots
-       , Lot.totalUnits "SOL" (prFinalQueue result) === 0
-       ]
+  in case prPerpPnl result of
+       [pnl] -> conjoin
+         [ property (null (prErrors result))
+         , property (null (prGainLosses result))
+         , ppClosedPnl pnl === USD (85 % 2)
+         , ppAsset pnl === "SOL"
+         , ppDirection pnl === "Close Long"
+         -- Perp close does NOT consume spot lots
+         , Lot.totalUnits "SOL" (prFinalQueue result) === 0
+         ]
+       entries -> counterexample ("expected 1 perp PnL entry, got " ++ show (length entries)) False
 
 -- ---------------------------------------------------------------------------
 -- 20. Perp close without ClosedPnl surfaces error
@@ -562,17 +596,50 @@ prop_perpDoesNotContaminateSpotFIFO = once $
         , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [spotBuy, perpOpen, perpClose, spotSell]
+  in case (prGainLosses result, prPerpPnl result) of
+       ([gain], [pnl]) -> conjoin
+         [ -- Spot sell should succeed (lot still exists)
+           property (null (prErrors result))
+         , glGain gain === USD 10000
+         , ppClosedPnl pnl === USD 10000
+         ]
+       (gains, pnls) -> counterexample
+         ("expected 1 gain and 1 perp PnL entry, got " ++ show (length gains) ++ " gains and " ++ show (length pnls) ++ " PnL entries")
+         False
+
+-- ---------------------------------------------------------------------------
+-- 23. CSV rendering escapes source-backed text fields
+-- ---------------------------------------------------------------------------
+
+prop_csvEscapesSourceTextFields :: Property
+prop_csvEscapesSourceTextFields = once $
+  let t = UTCTime (fromGregorian 2024 1 1) 0
+      incomeCsv = renderIncomeCSV
+        [ IncomeEntry
+            { iiTimestamp = t
+            , iiTxId      = "tx,\"1"
+            , iiAsset     = "ABC,DEF"
+            , iiAmount    = 1
+            , iiUSDValue  = 2
+            }
+        ]
+      perpCsv = renderPerpPnlCSV
+        [ PerpPnlEntry
+            { ppTimestamp = t
+            , ppTxId      = "tx-2"
+            , ppAsset     = "SOL"
+            , ppAmount    = 1
+            , ppDirection = "Close, Long"
+            , ppClosedPnl = 3
+            }
+        ]
   in conjoin
-       [ -- Spot sell should succeed (lot still exists)
-         property (null (prErrors result))
-       , property (length (prGainLosses result) == 1)
-       , glGain (head (prGainLosses result)) === USD 10000
-       , property (length (prPerpPnl result) == 1)
-       , ppClosedPnl (head (prPerpPnl result)) === USD 10000
+       [ property ("\"tx,\"\"1\",\"ABC,DEF\"" `T.isInfixOf` incomeCsv)
+       , property ("\"Close, Long\"" `T.isInfixOf` perpCsv)
        ]
 
 -- ---------------------------------------------------------------------------
--- 23. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
+-- 24. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
 -- ---------------------------------------------------------------------------
 
 golden_basicBuySellTransfer :: IO ()
@@ -634,15 +701,18 @@ main = do
   check "13. multi-lot disposal"         prop_multiLotDisposal
   check "14. dust precision"             prop_dustPrecision
   check "15. zero-value safety"          prop_zeroValueSafe
-  check "16. positive funding income"    prop_positiveFundingCreatesIncomeAndLot
-  check "17. negative funding expense"   prop_negativeFundingCreatesStructuredExpense
-  check "18. perp open no lots"          prop_perpOpenDoesNotCreateLots
-  check "19. perp close ClosedPnl"       prop_perpCloseUsesClosedPnl
-  check "20. perp close without pnl"     prop_perpCloseWithoutPnlIsError
-  check "21. perp close requires sent"   prop_perpCloseWithoutSentIsError
-  check "22. perp/spot isolation"        prop_perpDoesNotContaminateSpotFIFO
+  check "16. zero acquisition no gain"   prop_zeroAcquisitionDoesNotEmitGain
+  check "17. small decimal errors"       prop_insufficientLotErrorPadsSmallDecimals
+  check "18. positive funding income"    prop_positiveFundingCreatesIncomeAndLot
+  check "19. negative funding expense"   prop_negativeFundingCreatesStructuredExpense
+  check "20. perp open no lots"          prop_perpOpenDoesNotCreateLots
+  check "21. perp close ClosedPnl"       prop_perpCloseUsesClosedPnl
+  check "22. perp close without pnl"     prop_perpCloseWithoutPnlIsError
+  check "23. perp close requires sent"   prop_perpCloseWithoutSentIsError
+  check "24. perp/spot isolation"        prop_perpDoesNotContaminateSpotFIFO
+  check "25. CSV escaping"               prop_csvEscapesSourceTextFields
 
-  putStr "  23. golden buy/sell/transfer: "
+  putStr "  26. golden buy/sell/transfer: "
   golden_basicBuySellTransfer
   putStrLn "OK"
 

@@ -4,10 +4,43 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/kevin/cryptotax/types"
 )
+
+func TestHeliusGetSignaturesReturnsRPCError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if got := r.URL.Query().Get("api-key"); got != "test-key" {
+			t.Fatalf("expected api key query, got %q", got)
+		}
+		if err := json.NewEncoder(w).Encode(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      1,
+			"error": map[string]any{
+				"code":    -32005,
+				"message": "rate limited",
+			},
+		}); err != nil {
+			t.Fatalf("encode response: %v", err)
+		}
+	}))
+	defer server.Close()
+
+	h := NewHelius("test-key")
+	h.RPCURL = server.URL
+
+	_, err := h.getSignatures("wallet")
+	if err == nil {
+		t.Fatal("expected RPC error, got nil")
+	}
+	if !strings.Contains(err.Error(), "RPC error -32005: rate limited") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
 
 func TestHeliusParseEnhancedUsesTransactionsEnvelope(t *testing.T) {
 	t.Parallel()

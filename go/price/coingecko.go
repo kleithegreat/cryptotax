@@ -13,15 +13,25 @@ import (
 // Provider resolves historical USD prices for crypto assets.
 // Uses CoinGecko's free API: 30 calls/min, 10k calls/month.
 type Provider struct {
-	Client *http.Client
-	cache  map[string]string // "ASSET:2024-03-15" -> "3456.78"
-	mu     sync.Mutex
+	Client         *http.Client
+	BaseURL        string
+	Sleep          func(time.Duration)
+	RateLimitDelay time.Duration
+	RetryDelay     time.Duration
+	MaxRetries     int
+	cache          map[string]string // "ASSET:2024-03-15" -> "3456.78"
+	mu             sync.Mutex
 }
 
 func NewProvider() *Provider {
 	return &Provider{
-		Client: &http.Client{Timeout: 15 * time.Second},
-		cache:  make(map[string]string),
+		Client:         &http.Client{Timeout: 15 * time.Second},
+		BaseURL:        "https://api.coingecko.com/api/v3",
+		Sleep:          time.Sleep,
+		RateLimitDelay: 2 * time.Second,
+		RetryDelay:     60 * time.Second,
+		MaxRetries:     1,
+		cache:          make(map[string]string),
 	}
 }
 
@@ -69,24 +79,32 @@ func (p *Provider) Lookup(asset string, ts time.Time) (string, error) {
 
 	// CoinGecko free API: /coins/{id}/history?date=DD-MM-YYYY
 	url := fmt.Sprintf(
-		"https://api.coingecko.com/api/v3/coins/%s/history?date=%s&localization=false",
-		cgID, dateKey,
+		"%s/coins/%s/history?date=%s&localization=false",
+		strings.TrimRight(p.baseURL(), "/"), cgID, dateKey,
 	)
 
-	// Rate limit: 30 calls/min = 1 every 2 seconds to be safe
-	time.Sleep(2 * time.Second)
+	var resp *http.Response
+	for attempt := 0; ; attempt++ {
+		// Rate limit: 30 calls/min = 1 every 2 seconds to be safe.
+		p.sleep(p.RateLimitDelay)
 
-	resp, err := p.Client.Get(url)
-	if err != nil {
-		return "", fmt.Errorf("CoinGecko request failed: %w", err)
+		var err error
+		resp, err = p.Client.Get(url)
+		if err != nil {
+			return "", fmt.Errorf("CoinGecko request failed: %w", err)
+		}
+
+		if resp.StatusCode != http.StatusTooManyRequests {
+			break
+		}
+
+		_ = resp.Body.Close()
+		if attempt >= p.MaxRetries {
+			return "", fmt.Errorf("CoinGecko rate limited after %d retry attempts", attempt)
+		}
+		p.sleep(p.RetryDelay)
 	}
 	defer resp.Body.Close()
-
-	if resp.StatusCode == 429 {
-		// Rate limited — wait and retry once
-		time.Sleep(60 * time.Second)
-		return p.Lookup(asset, ts)
-	}
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -112,4 +130,18 @@ func (p *Provider) Lookup(asset string, ts time.Time) (string, error) {
 	p.mu.Unlock()
 
 	return priceStr, nil
+}
+
+func (p *Provider) sleep(delay time.Duration) {
+	if delay <= 0 || p.Sleep == nil {
+		return
+	}
+	p.Sleep(delay)
+}
+
+func (p *Provider) baseURL() string {
+	if p.BaseURL == "" {
+		return "https://api.coingecko.com/api/v3"
+	}
+	return p.BaseURL
 }
