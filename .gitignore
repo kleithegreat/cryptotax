@@ -2,6 +2,7 @@
 bin/
 dist-newstyle/
 result
+result-*
 
 # Go
 go/vendor/

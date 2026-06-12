@@ -27,6 +27,19 @@ below for new evidence.
 
 ## Pending Real-Wallet Validation Set
 
+> **Snapshot staleness (2026-06-11):** every "Current normalized JSON" line in
+> this section was captured BEFORE the 2026-06-11 normalizer overhaul and may
+> no longer match fresh output. Behavior that changed intentionally:
+> Hyperliquid unknown fill directions are skipped instead of force-classified
+> as spot buys (flips now normalize as `perp_close`); Helius swaps are
+> reconstructed by net balance change (the `sol-dflow-swap` SOL-for-SOL row
+> was a last-leg-wins artifact); EVM gas is attributed once per initiated
+> transaction; mint casing is preserved exactly; all decimals are
+> canonicalized (no scientific notation, no `FloatString(8)` padding);
+> Robinhood synthetic IDs include row numbers. Refresh with
+> `nix run .#audit -- capture` before relying on these rows as
+> current behavior.
+
 - Snapshot: `audit/normalized.json` generated locally from the recorded command and not committed by default because it contains the full real-wallet snapshot
 - Summary: [summary.json](../audit/summary.json)
 - Regression fixtures for documented current normalization only: [go/audit/testdata/real-wallet](../go/audit/testdata/real-wallet)
@@ -166,7 +179,8 @@ below for new evidence.
 
 - Label: `sol-addresslike-mint`
 - Source system: `Helius enhanced transactions / Solana explorer`
-- Source reference: `TODO: confirm tx 2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn and identify the address-like mint EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V`
+- Source reference: `tx 2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn`
+- Mint identification: `EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V` is the USDC mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, case-corrupted by the pre-c09615b uppercasing bug (base58 is case-sensitive, so the uppercased form is unresolvable on explorers). The `SO111...` mint is wrapped SOL, same corruption.
 - Filtered normalized case: [sol-addresslike-mint.json](../audit/cases/sol-addresslike-mint.json)
 - Filter command used: `nix run .#audit -- filter audit/normalized.json --tx-id 2dh7RefWvkHAKL9YQ1wZx5DJnhYMGWNkz2xSTh86792TgzhDPZiYw3VivrM6GdwMfJbWYNihZByo5ujEtXHBmQUn --wallet BeLzE7RD9XVg3y4CbLEfB29gMqvGHTxK5EwtvDJpLDWp`
 - Current normalized JSON: `10 rows with mixed sell/transfer_in legs across SOL, wrapped SOL mint SO111..., and address-like mint EPJFW...; several legs have zero USD values`

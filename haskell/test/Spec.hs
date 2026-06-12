@@ -3,6 +3,7 @@
 
 module Main (main) where
 
+import           Control.Exception  (ErrorCall(..), evaluate, try)
 import           Control.Monad      (unless)
 import           Test.QuickCheck
 import qualified Data.Aeson      as Aeson
@@ -12,15 +13,16 @@ import           Data.Ratio      ((%))
 import           Data.Text       (Text)
 import qualified Data.Text       as T
 import qualified Data.Text.IO    as TIO
-import           Data.Time       (UTCTime(..), fromGregorian, secondsToDiffTime,
-                                  nominalDay, addUTCTime)
+import           Data.Time       (Day, UTCTime(..), addDays, fromGregorian,
+                                  secondsToDiffTime, toGregorian)
 import           Paths_cryptotax_core (getDataFileName)
 import           System.Exit     (exitFailure)
 import           Types
 import           Lot             (LotQueue)
 import qualified Lot
 import           GainLoss        (processTransactions, ProcessResult(..))
-import           Report          (render8949CSV, renderIncomeCSV, renderPerpPnlCSV)
+import           Report          (render8949CSV, renderIncomeCSV, renderPerpPnlCSV,
+                                  renderTransfersCSV)
 
 -- ---------------------------------------------------------------------------
 -- Generators
@@ -173,29 +175,67 @@ prop_gainFormula = forAll genBuysAndSell $ \(asset, buys, sellAmt) ->
          property $ all (\g -> glGain g == glProceeds g - glCostBasis g) gains
 
 -- ---------------------------------------------------------------------------
--- 7. Holding period correctness around the 365-day boundary
+-- 7. Holding period: IRS more-than-one-year calendar rule
 -- ---------------------------------------------------------------------------
 
-prop_holdingPeriod :: Property
-prop_holdingPeriod = forAll genPositiveAmount $ \amt ->
-  forAll genPrice $ \px ->
-    forAll genHoldingDays $ \(days :: Int) ->
-      let buyTime  = UTCTime (fromGregorian 2022 1 1) 0
-          sellTime = addUTCTime (fromIntegral days * nominalDay) buyTime
-          queue    = Lot.acquire "ETH" buyTime (TokenAmount amt) (USD (amt * px)) Lot.empty
-          disp     = Disposal "ETH" sellTime (TokenAmount amt) (USD (amt * px)) 0
-          expected = if days > 365 then LongTerm else ShortTerm
-      in cover 40 (days > 365) "long-term" $
-         cover 40 (days <= 365) "short-term" $
-         case Lot.dispose disp queue of
-           Left _  -> property False
-           Right (gains, _) ->
-              property $ all (\g -> glPeriod g == expected) gains
+-- | Independent oracle for the IRS rule: long-term requires the disposal date
+-- to be strictly after the one-year anniversary calendar date. The only
+-- non-existent anniversary (Feb 29) maps to Mar 1, matching RollOver.
+oracleHoldingPeriod :: Day -> Day -> HoldingPeriod
+oracleHoldingPeriod acq sold =
+  let (y, m, d) = toGregorian acq
+      anniversary = if m == 2 && d == 29
+                      then fromGregorian (y + 1) 3 1
+                      else fromGregorian (y + 1) m d
+  in if sold > anniversary then LongTerm else ShortTerm
+
+prop_holdingPeriodCalendarRule :: Property
+prop_holdingPeriodCalendarRule = forAll genAcqDay $ \acqDay ->
+  forAll genOffset $ \offset ->
+    let soldDay  = addDays offset acqDay
+        buyTime  = UTCTime acqDay 0
+        sellTime = UTCTime soldDay 0
+        queue    = Lot.acquire "ETH" buyTime (TokenAmount 1) (USD 1000) Lot.empty
+        disp     = Disposal "ETH" sellTime (TokenAmount 1) (USD 1200) 0
+        expected = oracleHoldingPeriod acqDay soldDay
+    in cover 30 (expected == LongTerm) "long-term" $
+       cover 30 (expected == ShortTerm) "short-term" $
+       case Lot.dispose disp queue of
+         Left _  -> property False
+         Right (gains, _) ->
+           not (null gains) .&&. conjoin [glPeriod g === expected | g <- gains]
   where
-    genHoldingDays = frequency
-      [ (1, choose (1, 365 :: Int))
-      , (1, choose (366, 1000 :: Int))
+    genAcqDay = frequency
+      [ (3, do year  <- choose (2019, 2025)
+               month <- choose (1, 12)
+               day   <- choose (1, 28)
+               pure (fromGregorian year month day))
+      -- Leap-adjacent acquisition dates exercise the RollOver edge.
+      , (1, elements [ fromGregorian 2024 2 29, fromGregorian 2024 2 28
+                     , fromGregorian 2024 3 1,  fromGregorian 2020 2 29
+                     , fromGregorian 2023 2 28, fromGregorian 2023 12 31 ])
       ]
+    genOffset = frequency
+      [ (3, choose (355, 375 :: Integer))  -- dense around the anniversary
+      , (1, choose (1, 354))
+      , (1, choose (376, 1200))
+      ]
+
+-- | Explicit anniversary cases: a sale on the one-year anniversary calendar
+-- date is short-term, even across leap years (366 elapsed days).
+prop_holdingPeriodAnniversaryCases :: Property
+prop_holdingPeriodAnniversaryCases = once $ conjoin
+  [ hp 2024 1 15 2025 1 15 === ShortTerm  -- anniversary date itself
+  , hp 2024 1 15 2025 1 16 === LongTerm
+  , hp 2023 6 1  2024 6 1  === ShortTerm  -- 366 elapsed days across leap year
+  , hp 2023 6 1  2024 6 2  === LongTerm
+  , hp 2024 2 29 2025 3 1  === ShortTerm  -- Feb 29 rolls over to Mar 1
+  , hp 2024 2 29 2025 3 2  === LongTerm
+  ]
+  where
+    hp y1 m1 d1 y2 m2 d2 =
+      Lot.holdingPeriod (UTCTime (fromGregorian y1 m1 d1) 0)
+                        (UTCTime (fromGregorian y2 m2 d2) 0)
 
 -- ---------------------------------------------------------------------------
 -- 8. No phantom gains on empty input
@@ -429,7 +469,7 @@ prop_positiveFundingCreatesIncomeAndLot = once $
         , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
         , txSent = Nothing
         , txReceived = Just (AssetAmount "USDC" Nothing "1.879512" "1.879512")
-        , txFee = Nothing, txRawType = Just "funding", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Just "funding", txMarket = Just "ETH", txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in case prIncome result of
@@ -437,6 +477,7 @@ prop_positiveFundingCreatesIncomeAndLot = once $
          [ property (null (prErrors result))
          , iiUSDValue income === USD (469878 % 250000)
          , iiAsset income === "USDC"
+         , iiMarket income === Just "ETH"
          , Lot.totalUnits "USDC" (prFinalQueue result) === TokenAmount (469878 % 250000)
          , Lot.totalCostBasis (prFinalQueue result) === USD (469878 % 250000)
          ]
@@ -454,7 +495,7 @@ prop_negativeFundingCreatesStructuredExpense = once $
         , txType = FundingPayment, txWallet = "w1", txCounterparty = Nothing
         , txSent = Just (AssetAmount "USDC" Nothing "0.168095" "0.168095")
         , txReceived = Nothing
-        , txFee = Nothing, txRawType = Just "funding", txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        , txFee = Nothing, txRawType = Just "funding", txMarket = Just "BTC", txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
         }
       result = processTransactions [tx]
   in case prFundingExpenses result of
@@ -464,6 +505,7 @@ prop_negativeFundingCreatesStructuredExpense = once $
          , Lot.totalUnits "USDC" (prFinalQueue result) === 0
          , feUSDValue expense === USD (168095 % 1000000)
          , feAsset expense === "USDC"
+         , feMarket expense === Just "BTC"
          ]
        entries -> counterexample ("expected 1 funding expense, got " ++ show (length entries)) False
 
@@ -621,6 +663,7 @@ prop_csvEscapesSourceTextFields = once $
             , iiAsset     = "ABC,DEF"
             , iiAmount    = 1
             , iiUSDValue  = 2
+            , iiMarket    = Just "BTC,PERP"
             }
         ]
       perpCsv = renderPerpPnlCSV
@@ -634,12 +677,237 @@ prop_csvEscapesSourceTextFields = once $
             }
         ]
   in conjoin
-       [ property ("\"tx,\"\"1\",\"ABC,DEF\"" `T.isInfixOf` incomeCsv)
+       [ property ("Date,Tx ID,Asset,Amount,USD Value,Market" `T.isInfixOf` incomeCsv)
+       , property ("\"tx,\"\"1\",\"ABC,DEF\"" `T.isInfixOf` incomeCsv)
+       , property ("\"BTC,PERP\"" `T.isInfixOf` incomeCsv)
        , property ("\"Close, Long\"" `T.isInfixOf` perpCsv)
        ]
 
 -- ---------------------------------------------------------------------------
--- 24. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
+-- 24. parseDecimal accepts exactly the canonical decimal grammar
+-- ---------------------------------------------------------------------------
+
+prop_parseDecimalAcceptsCanonical :: Property
+prop_parseDecimalAcceptsCanonical = once $ conjoin
+  [ parseDecimal "0"                    === 0
+  , parseDecimal "-0.5"                 === ((-1) % 2)
+  , parseDecimal "1.234567890123456789" === (1234567890123456789 % (10 ^ (18 :: Integer)))
+  , parseDecimal "42"                   === 42
+  ]
+
+prop_parseDecimalRejectsMalformed :: Property
+prop_parseDecimalRejectsMalformed = once $ ioProperty $ do
+  let malformed = ["", "1e5", "+5", "abc", "1.2.3", "1.", ".5", " 1"] :: [Text]
+  results <- mapM rejects malformed
+  pure $ conjoin
+    [ counterexample ("expected parseDecimal to reject " ++ show t) ok
+    | (t, ok) <- zip malformed results
+    ]
+  where
+    rejects t = do
+      -- fromRational forces the full Rational; parseDecimal errors are lazy.
+      outcome <- try (evaluate (fromRational (parseDecimal t) :: Double))
+      pure $ case outcome of
+        Left (ErrorCall _) -> True
+        Right _            -> False
+
+-- ---------------------------------------------------------------------------
+-- 25. Negative-amount rows are surfaced as errors, never folded into FIFO
+-- ---------------------------------------------------------------------------
+
+prop_negativeRowsSurfacedNotApplied :: Property
+prop_negativeRowsSurfacedNotApplied = once $
+  let t1 = UTCTime (fromGregorian 2024 1 1) 0
+      t2 = UTCTime (fromGregorian 2024 2 1) 0
+      t3 = UTCTime (fromGregorian 2024 3 1) 0
+      goodBuy = Transaction
+        { txId = "good-buy", txTimestamp = t1, txSource = "test", txChain = "test"
+        , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
+        , txReceived = Just (AssetAmount "ETH" Nothing "2" "4000")
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        }
+      badBuy = goodBuy
+        { txId = "bad-buy", txTimestamp = t2
+        , txReceived = Just (AssetAmount "ETH" Nothing "-1" "2000")
+        }
+      badSell = Transaction
+        { txId = "bad-sell", txTimestamp = t3, txSource = "test", txChain = "test"
+        , txType = Sell, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Just (AssetAmount "ETH" Nothing "-1" "3000")
+        , txReceived = Nothing, txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        }
+      result = processTransactions [goodBuy, badBuy, badSell]
+  in conjoin
+       [ property (length (prErrors result) == 2)
+       , property (null (prGainLosses result))
+       -- The good buy is intact; the bad rows changed nothing.
+       , Lot.totalUnits "ETH" (prFinalQueue result) === TokenAmount 2
+       , Lot.totalCostBasis (prFinalQueue result) === USD 4000
+       ]
+
+prop_zeroAmountNonzeroBasisSurfaced :: Property
+prop_zeroAmountNonzeroBasisSurfaced = once $
+  let t = UTCTime (fromGregorian 2024 1 1) 0
+      tx = Transaction
+        { txId = "zero-amt-buy", txTimestamp = t, txSource = "test", txChain = "test"
+        , txType = Buy, txWallet = "w1", txCounterparty = Nothing, txSent = Nothing
+        , txReceived = Just (AssetAmount "ETH" Nothing "0" "150.25")
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        }
+      result = processTransactions [tx]
+  in conjoin
+       [ property (length (prErrors result) == 1)
+       , Lot.totalCostBasis (prFinalQueue result) === USD 0
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 26. Swap with failed disposal still acquires the received leg
+-- ---------------------------------------------------------------------------
+
+prop_swapFailedDisposalStillAcquires :: Property
+prop_swapFailedDisposalStillAcquires = once $
+  let t = UTCTime (fromGregorian 2024 6 1) 0
+      -- No prior ETH lots exist, so the sent-leg disposal must fail.
+      swapTx = Transaction
+        { txId = "swap-no-lots", txTimestamp = t, txSource = "test", txChain = "test"
+        , txType = Swap, txWallet = "w1", txCounterparty = Nothing
+        , txSent = Just (AssetAmount "ETH" Nothing "1" "3000")
+        , txReceived = Just (AssetAmount "SOL" Nothing "20" "3000")
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        }
+      result = processTransactions [swapTx]
+  in conjoin
+       [ property (length (prErrors result) == 1)
+       , property (null (prGainLosses result))
+       -- The received leg is explicit in the IR and must not be dropped.
+       , Lot.totalUnits "SOL" (prFinalQueue result) === TokenAmount 20
+       , Lot.totalCostBasis (prFinalQueue result) === USD 3000
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 27. Transfer rows are preserved in prTransfers, not silently dropped
+-- ---------------------------------------------------------------------------
+
+prop_transfersAreRecorded :: Property
+prop_transfersAreRecorded = once $
+  let t1 = UTCTime (fromGregorian 2024 3 1) 0
+      t2 = UTCTime (fromGregorian 2024 3 2) 0
+      outTx = Transaction
+        { txId = "xfer-out", txTimestamp = t1, txSource = "etherscan", txChain = "ethereum"
+        , txType = TransferOut, txWallet = "wallet-a", txCounterparty = Just "wallet-b"
+        , txSent = Just (AssetAmount "ETH" Nothing "0.5" "1050")
+        , txReceived = Nothing, txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        }
+      inTx = Transaction
+        { txId = "xfer-in", txTimestamp = t2, txSource = "etherscan", txChain = "ethereum"
+        , txType = TransferIn, txWallet = "wallet-b", txCounterparty = Just "wallet-a"
+        , txSent = Nothing
+        , txReceived = Just (AssetAmount "ETH" Nothing "0.5" "1050")
+        , txFee = Nothing, txRawType = Nothing, txMarket = Nothing, txEventGroupId = Nothing, txSplitReason = Nothing, txClosedPnl = Nothing
+        }
+      result = processTransactions [outTx, inTx]
+  in case prTransfers result of
+       [a, b] -> conjoin
+         [ property (null (prErrors result))
+         , property (null (prGainLosses result))
+         , teDirection a === DirOut
+         , teTxId a === "xfer-out"
+         , teAsset a === "ETH"
+         , teAmount a === TokenAmount (1 % 2)
+         , teWallet a === "wallet-a"
+         , teCounterparty a === Just "wallet-b"
+         , teDirection b === DirIn
+         , teWallet b === "wallet-b"
+         -- Transfers never touch FIFO lots.
+         , Lot.totalUnits "ETH" (prFinalQueue result) === 0
+         ]
+       entries -> counterexample ("expected 2 transfer entries, got " ++ show (length entries)) False
+
+-- ---------------------------------------------------------------------------
+-- 28. Fee allocation across multiple lots is exact
+-- ---------------------------------------------------------------------------
+
+prop_feeAllocationExact :: Property
+prop_feeAllocationExact = forAll genMultiLotWithFee $ \(amts, prices, sellPx, feeR) ->
+  let n = length amts
+      times = [UTCTime (fromGregorian 2024 m 1) 0 | m <- [1..n]]
+      sellTime = UTCTime (fromGregorian 2025 1 1) 0
+      totalAmt = sum amts
+      totalBasis = sum [amt * px | (amt, px) <- zip amts prices]
+      queue = foldl (\q (amt, px, t) ->
+        Lot.acquire "ETH" t (TokenAmount amt) (USD (amt * px)) q) Lot.empty
+        (zip3 amts prices times)
+      proceeds = totalAmt * sellPx
+      disp = Disposal "ETH" sellTime (TokenAmount totalAmt) (USD proceeds) (USD feeR)
+  in case Lot.dispose disp queue of
+       Left _  -> property False
+       Right (gains, _) ->
+         cover 50 (length gains >= 3) "multi-lot" $
+         conjoin
+           [ sum (map glGain gains)     === USD (proceeds - feeR - totalBasis)
+           , sum (map glProceeds gains) === USD (proceeds - feeR)
+           ]
+  where
+    genMultiLotWithFee = do
+      k <- choose (3, 6)
+      amts   <- vectorOf k genPositiveAmount
+      prices <- vectorOf k genPrice
+      sellPx <- genPrice
+      feeN   <- choose (1, 999 :: Integer)
+      feeD   <- choose (1, 100 :: Integer)
+      pure (amts, prices, sellPx, feeN % feeD)
+
+-- ---------------------------------------------------------------------------
+-- 29. Spreadsheet formula injection guard (shared csvField path, all CSVs)
+-- ---------------------------------------------------------------------------
+
+prop_csvFormulaInjectionGuard :: Property
+prop_csvFormulaInjectionGuard = once $
+  let t = UTCTime (fromGregorian 2024 1 1) 0
+      incomeCsv = renderIncomeCSV
+        [ IncomeEntry
+            { iiTimestamp = t
+            , iiTxId      = "=SUM(A1:A9)"
+            , iiAsset     = "ETH"
+            , iiAmount    = 1
+            , iiUSDValue  = 2
+            , iiMarket    = Nothing
+            }
+        ]
+      negCsv = renderIncomeCSV
+        [ IncomeEntry
+            { iiTimestamp = t
+            , iiTxId      = "tx-neg"
+            , iiAsset     = "ETH"
+            , iiAmount    = -1
+            , iiUSDValue  = 2
+            , iiMarket    = Nothing
+            }
+        ]
+      transferCsv = renderTransfersCSV
+        [ TransferEntry
+            { teTimestamp    = t
+            , teTxId         = "@cmd"
+            , teDirection    = DirIn
+            , teAsset        = "ETH"
+            , teAmount       = 1
+            , teUSDValue     = 2
+            , teWallet       = "+wallet"
+            , teCounterparty = Just "=2+5"
+            }
+        ]
+  in conjoin
+       [ property ("'=SUM(A1:A9)" `T.isInfixOf` incomeCsv)
+       , property ("'@cmd"        `T.isInfixOf` transferCsv)
+       , property ("'+wallet"     `T.isInfixOf` transferCsv)
+       , property ("'=2+5"        `T.isInfixOf` transferCsv)
+       -- '-' must NOT be guarded: negative amounts stay clean.
+       , property (",-1," `T.isInfixOf` negCsv)
+       , property (not ("'-" `T.isInfixOf` negCsv))
+       ]
+
+-- ---------------------------------------------------------------------------
+-- 30. Golden fixture: buy + sell + own-wallet transfer => exact 8949 CSV
 -- ---------------------------------------------------------------------------
 
 golden_basicBuySellTransfer :: IO ()
@@ -692,27 +960,36 @@ main = do
   check "4.  FIFO ordering"              prop_fifoOrdering
   check "5.  zero disposal is no-op"     prop_zeroDisposalNoop
   check "6.  gain formula exact"         prop_gainFormula
-  check "7.  holding period"             prop_holdingPeriod
-  check "8.  no phantom gains"           prop_noPhantomGains
-  check "9.  buy-then-sell roundtrip"    prop_buyThenSellExact
-  check "10. swap decomposition"         prop_swapDecomposition
-  check "11. JSON roundtrip"             prop_jsonRoundtrip
-  check "12. out-of-order handled"       prop_outOfOrderHandled
-  check "13. multi-lot disposal"         prop_multiLotDisposal
-  check "14. dust precision"             prop_dustPrecision
-  check "15. zero-value safety"          prop_zeroValueSafe
-  check "16. zero acquisition no gain"   prop_zeroAcquisitionDoesNotEmitGain
-  check "17. small decimal errors"       prop_insufficientLotErrorPadsSmallDecimals
-  check "18. positive funding income"    prop_positiveFundingCreatesIncomeAndLot
-  check "19. negative funding expense"   prop_negativeFundingCreatesStructuredExpense
-  check "20. perp open no lots"          prop_perpOpenDoesNotCreateLots
-  check "21. perp close ClosedPnl"       prop_perpCloseUsesClosedPnl
-  check "22. perp close without pnl"     prop_perpCloseWithoutPnlIsError
-  check "23. perp close requires sent"   prop_perpCloseWithoutSentIsError
-  check "24. perp/spot isolation"        prop_perpDoesNotContaminateSpotFIFO
-  check "25. CSV escaping"               prop_csvEscapesSourceTextFields
+  check "7.  holding period calendar"    prop_holdingPeriodCalendarRule
+  check "8.  holding period anniversary" prop_holdingPeriodAnniversaryCases
+  check "9.  no phantom gains"           prop_noPhantomGains
+  check "10. buy-then-sell roundtrip"    prop_buyThenSellExact
+  check "11. swap decomposition"         prop_swapDecomposition
+  check "12. JSON roundtrip"             prop_jsonRoundtrip
+  check "13. out-of-order handled"       prop_outOfOrderHandled
+  check "14. multi-lot disposal"         prop_multiLotDisposal
+  check "15. dust precision"             prop_dustPrecision
+  check "16. zero-value safety"          prop_zeroValueSafe
+  check "17. zero acquisition no gain"   prop_zeroAcquisitionDoesNotEmitGain
+  check "18. small decimal errors"       prop_insufficientLotErrorPadsSmallDecimals
+  check "19. positive funding income"    prop_positiveFundingCreatesIncomeAndLot
+  check "20. negative funding expense"   prop_negativeFundingCreatesStructuredExpense
+  check "21. perp open no lots"          prop_perpOpenDoesNotCreateLots
+  check "22. perp close ClosedPnl"       prop_perpCloseUsesClosedPnl
+  check "23. perp close without pnl"     prop_perpCloseWithoutPnlIsError
+  check "24. perp close requires sent"   prop_perpCloseWithoutSentIsError
+  check "25. perp/spot isolation"        prop_perpDoesNotContaminateSpotFIFO
+  check "26. CSV escaping"               prop_csvEscapesSourceTextFields
+  check "27. parseDecimal canonical"     prop_parseDecimalAcceptsCanonical
+  check "28. parseDecimal rejects"       prop_parseDecimalRejectsMalformed
+  check "29. negative rows surfaced"     prop_negativeRowsSurfacedNotApplied
+  check "30. zero-amt basis surfaced"    prop_zeroAmountNonzeroBasisSurfaced
+  check "31. swap failed disposal"       prop_swapFailedDisposalStillAcquires
+  check "32. transfers recorded"         prop_transfersAreRecorded
+  check "33. fee allocation exact"       prop_feeAllocationExact
+  check "34. CSV formula injection"      prop_csvFormulaInjectionGuard
 
-  putStr "  26. golden buy/sell/transfer: "
+  putStr "  35. golden buy/sell/transfer: "
   golden_basicBuySellTransfer
   putStrLn "OK"
 

@@ -26,7 +26,7 @@ The repository is optimized for tax accuracy, evidence retention, and explicit h
 
 ## Support Tiers
 
-When describing behavior, use these categories consistently:
+Canonical tier definitions live in `docs/repo/SPEC.md`; this list is the working summary. When describing behavior, use these categories consistently:
 
 - **Supported** — intentionally modeled and relied upon within current repo scope
 - **Current-behavior-only** — frozen by regression tests or fixtures, but not yet a claim of tax correctness
@@ -80,7 +80,7 @@ Repository-wide validation:
 nix develop -c bash -lc 'cd go && go test ./...'
 nix build .#cli
 nix build .#core
-nix flake check
+nix flake check   # runs the full Go test suite (checks.go-tests) and Haskell suite
 ```
 
 Docs-only changes may skip builds when genuinely unnecessary, but the report must say so explicitly.

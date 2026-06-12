@@ -96,6 +96,8 @@ env-derived secrets into flag defaults, so `--help` output does not echo them.
 The audit summary reports row counts by `source` and `tx_type`, exact
 sent/received/fee asset totals, and diagnostic row lists such as
 `zero_usd_value_rows` and `suspicious_asset_rows` for manual review.
+Rows that cannot be normalized are never dropped silently: they are written
+to a `.skipped.json` sidecar with a structured reason.
 
 For reproducible manual review of normalized transactions, see
 `docs/audit-workflow.md` and the first verified fixture in
@@ -123,11 +125,20 @@ For reproducible manual review of normalized transactions, see
 3. **Transfers**: Clear own-wallet transfers are preserved as non-taxable
    transfer rows. The core ignores them, which keeps aggregate basis intact.
 
-4. **Holding period**: > 365 days = long-term capital gains rate. Otherwise
-   short-term (taxed as ordinary income).
+4. **Holding period**: long-term requires holding *more than one year*
+   (calendar rule, per IRS — a sale on the one-year anniversary date is
+   short-term; Feb 29 acquisitions roll over to Mar 1). Dates are UTC trade
+   dates.
 
 5. **Output**: Form 8949 CSV with one row per disposal, ready for TurboTax /
-   TaxAct / H&R Block import.
+   TaxAct / H&R Block import, plus supplemental CSVs written next to it when
+   non-empty: `income.csv` (ordinary income), `funding_expenses.csv`
+   (negative Hyperliquid funding, informational), `perp_pnl.csv`
+   (exchange-reported perp realized PnL), and `transfers.csv` (non-taxable
+   own-wallet transfers, for visibility). Pass `--tax-year YYYY` to restrict
+   report rows to one calendar year (lot accounting always uses full
+   history). If any transaction cannot be processed, the run exits nonzero
+   and says the 8949 is incomplete — do not file from a failing run.
 
 ## Nix outputs
 
@@ -136,7 +147,7 @@ For reproducible manual review of normalized transactions, see
 - `apps.run`: wrapper that runs the Go CLI with `--core` pointed at the flake-built Haskell binary
 - `apps.dry-run`: wrapper that runs the Go CLI with `--dry-run`
 - `apps.audit`: wrapper that runs `cryptotax audit ...`
-- `checks`: Go build, Haskell build, Haskell test suite
+- `checks`: Go build, full Go test suite, Haskell build, Haskell test suite
 - `devShell`: Go + Haskell development environment
 
 ## Project structure
@@ -144,34 +155,41 @@ For reproducible manual review of normalized transactions, see
 ```
 cryptotax/
 ├── flake.nix                 # Flake packages, apps, checks, and dev shell
-├── docs/
+├── AGENTS.md                 # Agent working agreement (read first)
+├── docs/                     # Per-domain SPEC/ARCHITECTURE/REVIEW/QUIRKS
+│   ├── repo/                 #   repo-wide docs and decision records
+│   ├── core/ evm/ solana/    #   one directory per domain
+│   ├── hyperliquid/ ir/ audit/
 │   ├── audit-workflow.md     # Reproducible audit steps for normalized JSON
-│   └── known-transactions.md # Human-reviewed transaction comparison template
+│   └── known-transactions.md # Human-reviewed transaction evidence log
 ├── schema/
 │   └── transactions.json     # JSON Schema (Go→Haskell contract)
 ├── go/
-│   ├── cmd/main.go           # CLI entrypoint (cobra)
+│   ├── cmd/                  # CLI entrypoint (cobra) + audit subcommands
 │   ├── audit/                # Audit payload capture, filtering, and summaries
+│   ├── decimal/              # Exact decimal-string arithmetic (money paths)
 │   ├── fetcher/              # Chain-specific data fetchers
-│   ├── price/                # CoinGecko USD price lookups
-│   ├── normalize/            # Raw → unified transaction schema
+│   ├── price/                # CoinGecko USD price lookups (identity-gated)
+│   ├── normalize/            # Raw → unified IR + canonicalization boundary
 │   ├── transfer/             # Own-wallet transfer matching
-│   └── types/                # Shared Go structs
+│   └── types/                # Shared Go structs + canonical ordering
 └── haskell/
-    ├── app/Main.hs           # Reads JSON stdin, runs engine
+    ├── app/Main.hs           # Reads JSON stdin, runs engine, writes reports
     ├── src/
-    │   ├── Types.hs          # ADTs with Rational arithmetic
+    │   ├── Types.hs          # ADTs, strict exact-decimal parsing
     │   ├── Lot.hs            # FIFO cost basis lot tracker
     │   ├── GainLoss.hs       # Per-disposal gain/loss engine
-    │   └── Report.hs         # Form 8949 CSV output
-    └── test/Spec.hs          # QuickCheck properties
+    │   └── Report.hs         # Form 8949 + supplemental CSV output
+    └── test/Spec.hs          # QuickCheck properties + golden fixture
 ```
 
 ## Known limitations
 
-- EVM swaps and bridges are not fully reconstructed from per-address Etherscan rows yet; inbound legs are treated conservatively instead of guessed into taxable income.
-- Hyperliquid perp activity is still approximated onto the current IR; positive funding receipts are modeled as ordinary income plus USDC acquisitions, while negative funding expenses are emitted to `funding_expenses.csv` as informational supplemental output without consuming USDC lots or making a broader tax-semantics claim.
-- Source APIs can omit metadata or use token symbols that do not yet map cleanly to historical price lookups. Those rows fall back to `"0"` USD values instead of inventing prices.
+- EVM swaps and bridges are not fully reconstructed from per-address Etherscan rows yet; inbound legs are treated conservatively instead of guessed into taxable income. Internal ETH transfers (`txlistinternal`) are not fetched at all.
+- Hyperliquid deposits/withdrawals are not fetched, so USDC bridged into Hyperliquid surfaces as insufficient-lot errors when spent there. Positive funding receipts are modeled as ordinary income plus USDC acquisitions; negative funding goes to `funding_expenses.csv` as informational output without consuming USDC lots.
+- FIFO lots are pooled per asset symbol globally across wallets. IRS Rev. Proc. 2024-28 requires wallet-by-wallet basis tracking from 2025; adopting that is a pending, explicitly human decision (see `docs/repo/REVIEW.md`).
+- In-kind fees (gas) reduce proceeds in USD terms but the gas asset itself is never consumed from inventory.
+- Source APIs can omit metadata or use token symbols that do not map cleanly to historical price lookups. Those rows fall back to `"0"` USD values instead of inventing prices, and pricing refuses to trust metadata symbols for unverified on-chain identities (no $1 for fake "USDC").
 
 ## Disclaimer
 

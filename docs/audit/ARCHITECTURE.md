@@ -61,7 +61,7 @@ Important named constructs:
 ### Current-behavior-only checkpoints
 
 - `go/audit/audit_test.go` freezes filter behavior, asset aggregation, summary flags, and capture artifact writing.
-- `go/audit/real_wallet_regression_test.go` freezes the documented current behavior stored in `go/audit/testdata/real-wallet/*.expected.json`.
+- `go/audit/real_wallet_regression_test.go` checks internal consistency between captured input payloads and their documented expectations in `go/audit/testdata/real-wallet/*.expected.json`. It does NOT run the normalizer (the inputs are normalized output, not raw source data); normalizer behavior regressions are covered by `go/normalize/normalize_test.go`.
 - `docs/known-transactions.md` is the current evidence log that connects filtered payloads to manual review work.
 
 ### Unsupported but surfaced behavior
@@ -82,7 +82,7 @@ Important named constructs:
 - `docs/audit-workflow.md` describes the manual sequence: `capture`, then `filter`, then `summary`, then a comparison entry in `docs/known-transactions.md`.
 - `go/audit/testdata/real-wallet/*.input.json` holds the normalized payload under review.
 - `go/audit/testdata/real-wallet/*.expected.json` stores the documented current normalized rows plus TODO placeholders for human confirmation.
-- `TestDocumentedRealWalletFixturesMatchCurrentNormalizedRows` asserts that the documented fixtures still match the current normalized payload and that unresolved human-verification placeholders stay explicit.
+- `TestDocumentedRealWalletFixturesAreInternallyConsistent` asserts that each documented expectation matches its captured input snapshot and that unresolved human-verification placeholders stay explicit. The snapshots are frozen at capture time (`status: documented_snapshot_normalization`); after intentional normalizer changes they describe the OLD behavior until a fresh `audit capture` refresh.
 
 ## Notable current divergences from spec
 

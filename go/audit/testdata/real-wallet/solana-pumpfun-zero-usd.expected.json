@@ -1,7 +1,7 @@
 {
   "label": "solana-pumpfun-zero-usd",
   "category": "solana_suspicious_zero_usd_swap",
-  "status": "documented_current_normalization",
+  "status": "documented_snapshot_normalization",
   "current_behavior_summary": "Current normalization keeps the PUMP_FUN row as a swap from SOL into an address-like mint with zero USD on the received leg and a separate SOL fee.",
   "group_human_confirmation_placeholder": "TODO confirm the received mint symbol and valuation source before deciding whether the current zero-USD swap representation is acceptable.",
   "cases": [

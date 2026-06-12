@@ -445,3 +445,69 @@ func testPayload() types.TxPayload {
 		},
 	}
 }
+
+// Regression: integer totals were corrupted by trailing-zero trimming
+// ("1000" rendered as "1"), and exponent-notation inputs collapsed to "0".
+func TestSummaryAmountTotalsExact(t *testing.T) {
+	t.Parallel()
+
+	payload := types.TxPayload{
+		Version: "1.0.0",
+		Wallets: []string{"w"},
+		Transactions: []types.Transaction{
+			{
+				ID: "t1", Timestamp: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC),
+				Source: types.SourceRobinhood, Chain: types.ChainRobinhood,
+				TxType: types.TxBuy, Wallet: "w",
+				Received: &types.AssetAmount{Asset: "USDC", Amount: "1000", USDValue: "1000"},
+			},
+			{
+				ID: "t2", Timestamp: time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC),
+				Source: types.SourceRobinhood, Chain: types.ChainRobinhood,
+				TxType: types.TxSell, Wallet: "w",
+				Sent: &types.AssetAmount{Asset: "SOL", Amount: "1e-05", USDValue: "0"},
+			},
+		},
+	}
+
+	summary, err := BuildSummary(payload)
+	if err != nil {
+		t.Fatalf("BuildSummary: %v", err)
+	}
+	if got := summary.ByAsset["USDC"].ReceivedAmount; got != "1000" {
+		t.Errorf("USDC received total = %q, want 1000", got)
+	}
+	if got := summary.ByAsset["SOL"].SentAmount; got != "0.00001" {
+		t.Errorf("SOL sent total = %q, want 0.00001", got)
+	}
+}
+
+// One wallet captured under two casings must aggregate and filter as one
+// identity (EVM addresses are case-insensitive; Solana stays exact).
+func TestWalletIdentityFoldsEVMCase(t *testing.T) {
+	t.Parallel()
+
+	mixed := "0x8D5A67da96cf80E013979C5C4CD0663d7090E3cA"
+	lower := "0x8d5a67da96cf80e013979c5c4cd0663d7090e3ca"
+	payload := types.TxPayload{
+		Version: "1.0.0",
+		Wallets: []string{mixed},
+		Transactions: []types.Transaction{
+			{ID: "a", Timestamp: time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC), Source: types.SourceEtherscan, Chain: types.ChainEthereum, TxType: types.TxTransferIn, Wallet: mixed},
+			{ID: "b", Timestamp: time.Date(2025, 1, 2, 0, 0, 0, 0, time.UTC), Source: types.SourceEtherscan, Chain: types.ChainEthereum, TxType: types.TxTransferIn, Wallet: lower},
+		},
+	}
+
+	summary, err := BuildSummary(payload)
+	if err != nil {
+		t.Fatalf("BuildSummary: %v", err)
+	}
+	if got := summary.ByWallet[lower]; got != 2 {
+		t.Errorf("ByWallet[%q] = %d, want 2 (case-folded)", lower, got)
+	}
+
+	filtered := FilterPayload(payload, Filters{Wallet: mixed})
+	if len(filtered.Transactions) != 2 {
+		t.Errorf("wallet filter matched %d rows, want 2", len(filtered.Transactions))
+	}
+}

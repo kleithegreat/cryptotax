@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"math/big"
 	"os"
+
 	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 	"unicode"
 
+	"github.com/kevin/cryptotax/decimal"
 	"github.com/kevin/cryptotax/normalize"
 	"github.com/kevin/cryptotax/types"
 )
@@ -180,7 +182,7 @@ func BuildSummary(payload types.TxPayload) (Summary, error) {
 		summary.BySource[tx.Source]++
 		summary.ByChain[tx.Chain]++
 		summary.ByTxType[tx.TxType]++
-		summary.ByWallet[tx.Wallet]++
+		summary.ByWallet[types.CanonicalWallet(tx.Wallet)]++
 
 		if tx.ID != "" {
 			uniqueIDs[tx.ID] = struct{}{}
@@ -290,7 +292,7 @@ func matchesFilters(tx types.Transaction, filters Filters) bool {
 	if filters.ToTimestamp != nil && tx.Timestamp.After(*filters.ToTimestamp) {
 		return false
 	}
-	if filters.Wallet != "" && tx.Wallet != filters.Wallet {
+	if filters.Wallet != "" && types.CanonicalWallet(tx.Wallet) != types.CanonicalWallet(filters.Wallet) {
 		return false
 	}
 	if filters.Asset != "" && !transactionHasAsset(tx, filters.Asset) {
@@ -401,56 +403,30 @@ func accumulateAsset(accumulators map[string]*assetSummaryAccumulator, assetsSee
 }
 
 type amountAccumulator struct {
-	total    big.Rat
-	maxScale int
-	seen     bool
+	total big.Rat
+	seen  bool
 }
 
 func (acc *amountAccumulator) Add(value string) error {
-	var rat big.Rat
-	if _, ok := rat.SetString(value); !ok {
-		return fmt.Errorf("parse decimal %q", value)
+	rat, err := decimal.Parse(value)
+	if err != nil {
+		return err
 	}
 
 	if acc.seen {
-		acc.total.Add(&acc.total, &rat)
+		acc.total.Add(&acc.total, rat)
 	} else {
-		acc.total.Set(&rat)
+		acc.total.Set(rat)
 		acc.seen = true
-	}
-
-	if scale := decimalScale(value); scale > acc.maxScale {
-		acc.maxScale = scale
 	}
 	return nil
 }
 
 func (acc amountAccumulator) String() string {
-	if !acc.seen || acc.total.Sign() == 0 {
+	if !acc.seen {
 		return "0"
 	}
-
-	value := acc.total.FloatString(acc.maxScale)
-	value = strings.TrimRight(value, "0")
-	value = strings.TrimRight(value, ".")
-	if value == "" || value == "-0" {
-		return "0"
-	}
-	return value
-}
-
-func decimalScale(value string) int {
-	value = strings.TrimSpace(value)
-	point := strings.IndexByte(value, '.')
-	if point < 0 {
-		return 0
-	}
-
-	frac := value[point+1:]
-	if exponent := strings.IndexAny(frac, "eE"); exponent >= 0 {
-		frac = frac[:exponent]
-	}
-	return len(frac)
+	return decimal.String(&acc.total)
 }
 
 type assetComponent struct {
@@ -568,11 +544,11 @@ func assetIdentityNeedsManualReview(reasons []string) bool {
 }
 
 func isZeroDecimal(value string) (bool, error) {
-	var rat big.Rat
-	if _, ok := rat.SetString(strings.TrimSpace(value)); !ok {
-		return false, fmt.Errorf("parse decimal %q", value)
+	sign, err := decimal.Sign(value)
+	if err != nil {
+		return false, err
 	}
-	return rat.Sign() == 0, nil
+	return sign == 0, nil
 }
 
 func suspiciousAssetReasons(asset string) []string {

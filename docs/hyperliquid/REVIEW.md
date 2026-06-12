@@ -15,23 +15,6 @@ This document tracks grounded gaps between `docs/hyperliquid/SPEC.md` and the cu
 - Desired direction implied by the spec: a reviewer should be able to connect one normalized funding row back to the Hyperliquid market and source event that produced it.
 - What blocks resolution: whether the synthetic `event_group_id` plus market context is sufficient evidence for support-claim upgrades still depends on human verification of the documented exemplar cases.
 
-### Negative funding is now a structured expense; inventory effect is not applied
-
-- Status: `done`
-- Issue type: resolved
-- Resolution: Decision Option C adopted — negative funding creates structured `FundingExpense` entries in `prFundingExpenses`, written to `funding_expenses.csv`. The expense does not consume USDC lots (Option D was not chosen). `prop_negativeFundingCreatesStructuredExpense` in `haskell/test/Spec.hs` freezes the new behavior.
-
-### Perp fills are quarantined from spot FIFO; ClosedPnl used for PnL output
-
-- Status: `done`
-- Issue type: resolved
-- Resolution: Decision Option C (API-PnL model) adopted — perp fills now use `perp_open` / `perp_close` tx types instead of spot `buy` / `sell`. `ClosedPnl` is propagated from the fetcher through normalization; `StartPosition` is retained only on the raw fetcher row for possible future use. The Haskell core emits `PerpPnlEntry` records using exchange-reported `ClosedPnl` in `perp_pnl.csv`. Perp opens are no-ops (no phantom lots). Perp closes do not consume spot FIFO lots. Tests `prop_perpOpenDoesNotCreateLots`, `prop_perpCloseUsesClosedPnl`, `prop_perpCloseWithoutPnlIsError`, `prop_perpCloseWithoutSentIsError`, and `prop_perpDoesNotContaminateSpotFIFO` freeze the quarantine and PnL behavior.
-
-### Perp realized PnL intentionally stays in `perp_pnl.csv`, not 8949
-
-- Status: `done`
-- Issue type: resolved
-- Resolution: Human decision recorded — canonical output keeps perp realized PnL in the separate `perp_pnl.csv` report rather than forcing a derivative-specific 8949 representation. The remaining open perp work is about consolidation and support verification, not about moving perps onto 8949.
 
 ### Partial-fill ClosedPnl is not consolidated
 
@@ -44,3 +27,16 @@ This document tracks grounded gaps between `docs/hyperliquid/SPEC.md` and the cu
 ## Non-goals / intentionally narrow boundaries
 
 - Spot `@N` asset resolution through `fetchSpotMeta` is not itself under review here.
+
+## Resolved (kept as one-line history; details in git log)
+
+- **Negative funding is now a structured expense; inventory effect is not applied** — Decision Option C adopted — negative funding creates structured `FundingExpense` entries in `prFundingExpenses`, written to `funding_expenses.csv`. The expense does not consume USDC lots (Option D was not chosen). `pr...
+- **Perp fills are quarantined from spot FIFO; ClosedPnl used for PnL output** — Decision Option C (API-PnL model) adopted — perp fills now use `perp_open` / `perp_close` tx types instead of spot `buy` / `sell`. `ClosedPnl` is propagated from the fetcher through normalization; `StartPosition` is r...
+- **Perp realized PnL intentionally stays in `perp_pnl.csv`, not 8949** — Human decision recorded — canonical output keeps perp realized PnL in the separate `perp_pnl.csv` report rather than forcing a derivative-specific 8949 representation. The remaining open perp work is about consolidati...
+
+### Deposits and withdrawals are not fetched, so bridged USDC is double-exposed
+
+- Status: `open`
+- Issue type: `implementation gap`
+- The fetcher reads fills and funding only. USDC bridged into Hyperliquid appears on the Etherscan side as an outbound transfer (classified `sell` to an unknown counterparty) and never as a Hyperliquid acquisition. HL spot trades and the funding model then reference USDC inventory the core never saw arrive, surfacing as insufficient-lot errors.
+- Smallest good next checkpoint: fetch the `userNonFundingLedgerUpdates` info endpoint (deposits/withdrawals/transfers), emit them as `transfer_in`/`transfer_out` rows, and let the transfer matcher pair them with the EVM bridge legs.

@@ -28,9 +28,15 @@ type documentedFixtureCase struct {
 	CurrentNormalizedTransactions []types.Transaction `json:"current_normalized_transactions"`
 }
 
-// These fixtures freeze documented normalized rows from the audit snapshot; they
-// are not source-truth or tax-correctness validations.
-func TestDocumentedRealWalletFixturesMatchCurrentNormalizedRows(t *testing.T) {
+// These fixtures freeze documented normalized rows from a specific audit
+// snapshot. The test verifies internal CONSISTENCY between each captured
+// input payload and its documented expectation — it does NOT run the
+// normalizer (the inputs are normalized output, not raw source data), so it
+// cannot detect normalizer behavior changes. Pipeline-level regression
+// coverage lives in go/normalize/normalize_test.go against raw-shaped
+// inputs. Refresh these snapshots with `cryptotax audit capture` when
+// normalization behavior changes intentionally.
+func TestDocumentedRealWalletFixturesAreInternallyConsistent(t *testing.T) {
 	t.Parallel()
 
 	expectationPaths, err := filepath.Glob(filepath.Join("testdata", "real-wallet", "*.expected.json"))
@@ -46,7 +52,7 @@ func TestDocumentedRealWalletFixturesMatchCurrentNormalizedRows(t *testing.T) {
 	for _, expectationPath := range expectationPaths {
 		expectation := loadDocumentedFixtureGroup(t, expectationPath)
 
-		if expectation.Status != "documented_current_normalization" {
+		if expectation.Status != "documented_snapshot_normalization" {
 			t.Fatalf("%s: unexpected status %q", expectationPath, expectation.Status)
 		}
 		if strings.TrimSpace(expectation.CurrentBehaviorSummary) == "" {

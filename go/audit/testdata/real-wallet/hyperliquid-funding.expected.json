@@ -1,7 +1,7 @@
 {
   "label": "hyperliquid-funding",
   "category": "hyperliquid_funding_pair",
-  "status": "documented_current_normalization",
+  "status": "documented_snapshot_normalization",
   "current_behavior_summary": "Current normalization keeps positive funding as an inbound USDC funding_payment row and negative funding as an outbound USDC funding_payment row.",
   "group_human_confirmation_placeholder": "TODO confirm both funding events against retained Hyperliquid source evidence and decide how negative funding expenses should flow through final tax output.",
   "cases": [

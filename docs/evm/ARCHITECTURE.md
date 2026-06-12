@@ -49,7 +49,7 @@ Important named constructs:
 - EVM rows enter the IR with `source="etherscan"` and `chain="ethereum"` or `chain="arbitrum"`.
 - `raw_type` is whatever Etherscan returned in `FunctionName`.
 - Fees stay visible on outbound rows even when the economic meaning of the main row is still unresolved.
-- The bridge regression fixture in `go/audit/testdata/real-wallet/evm-bridge-usdc-fillrelay.expected.json` freezes one documented current behavior set.
+- The bridge snapshot fixture in `go/audit/testdata/real-wallet/evm-bridge-usdc-fillrelay.expected.json` documents one captured behavior set.
 
 ## Current support boundary
 
@@ -64,7 +64,7 @@ Important named constructs:
 
 - `go/fetcher/etherscan_test.go` freezes pagination, empty-response handling, and rate-limit retry behavior.
 - `go/transfer/match_test.go` freezes the current own-wallet and confirmed-bridge matching rules.
-- `go/audit/testdata/real-wallet/evm-bridge-usdc-fillrelay.expected.json` freezes the documented current bridge normalization.
+- `go/audit/testdata/real-wallet/evm-bridge-usdc-fillrelay.expected.json` documents bridge normalization as of its capture snapshot (it does not re-run the normalizer).
 - `docs/known-transactions.md` records additional EVM review targets such as `eth-swap-usdc` and suspicious-asset receipts.
 
 ### Unsupported but surfaced behavior

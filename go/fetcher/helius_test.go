@@ -15,7 +15,8 @@ func TestHeliusGetSignaturesReturnsRPCError(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Query().Get("api-key"); got != "test-key" {
-			t.Fatalf("expected api key query, got %q", got)
+			t.Errorf("expected api key query, got %q", got)
+			return
 		}
 		if err := json.NewEncoder(w).Encode(map[string]any{
 			"jsonrpc": "2.0",
@@ -25,7 +26,7 @@ func TestHeliusGetSignaturesReturnsRPCError(t *testing.T) {
 				"message": "rate limited",
 			},
 		}); err != nil {
-			t.Fatalf("encode response: %v", err)
+			t.Errorf("encode response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -47,17 +48,20 @@ func TestHeliusParseEnhancedUsesTransactionsEnvelope(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if got := r.URL.Query().Get("api-key"); got != "test-key" {
-			t.Fatalf("expected api key query, got %q", got)
+			t.Errorf("expected api key query, got %q", got)
+			return
 		}
 
 		var body struct {
 			Transactions []string `json:"transactions"`
 		}
 		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
-			t.Fatalf("decode request body: %v", err)
+			t.Errorf("decode request body: %v", err)
+			return
 		}
 		if len(body.Transactions) != 2 || body.Transactions[0] != "sig-1" || body.Transactions[1] != "sig-2" {
-			t.Fatalf("unexpected transactions envelope: %#v", body.Transactions)
+			t.Errorf("unexpected transactions envelope: %#v", body.Transactions)
+			return
 		}
 
 		if err := json.NewEncoder(w).Encode([]heliusEnhancedTx{{
@@ -69,10 +73,10 @@ func TestHeliusParseEnhancedUsesTransactionsEnvelope(t *testing.T) {
 				FromUserAccount: "wallet",
 				ToUserAccount:   "dest",
 				Mint:            "So11111111111111111111111111111111111111112",
-				TokenAmount:     1.25,
+				TokenAmount:     json.Number("1.25"),
 			}},
 		}}); err != nil {
-			t.Fatalf("encode response: %v", err)
+			t.Errorf("encode response: %v", err)
 		}
 	}))
 	defer server.Close()
@@ -116,10 +120,10 @@ func TestHeliusParseEnhancedFallsBackToLegacyEndpoint(t *testing.T) {
 				FromUserAccount: "wallet",
 				ToUserAccount:   "dest",
 				Mint:            "So11111111111111111111111111111111111111112",
-				TokenAmount:     1,
+				TokenAmount:     json.Number("1"),
 			}},
 		}}); err != nil {
-			t.Fatalf("encode legacy response: %v", err)
+			t.Errorf("encode legacy response: %v", err)
 		}
 	}))
 	defer legacy.Close()
@@ -160,7 +164,7 @@ func TestConvertHeliusSwapPreservesMintAndSourceSymbolSeparately(t *testing.T) {
 			ToUserAccount:   "wallet",
 			Mint:            mint,
 			Symbol:          " pump ",
-			TokenAmount:     540724.686218,
+			TokenAmount:     json.Number("540724.686218"),
 		}},
 	}, "wallet")
 
@@ -196,7 +200,7 @@ func TestConvertHeliusTransferDoesNotInventDisplaySymbol(t *testing.T) {
 			FromUserAccount: "sender",
 			ToUserAccount:   "wallet",
 			Mint:            mint,
-			TokenAmount:     1.25,
+			TokenAmount:     json.Number("1.25"),
 		}},
 	}, "wallet")
 
@@ -216,5 +220,135 @@ func TestConvertHeliusTransferDoesNotInventDisplaySymbol(t *testing.T) {
 	}
 	if tx.SplitReason != "wallet_touching_leg_preservation" {
 		t.Fatalf("expected split reason %q, got %q", "wallet_touching_leg_preservation", tx.SplitReason)
+	}
+}
+
+// Regression for the last-wins leg-selection bug: a token→token swap with a
+// rent-sized native SOL out-leg must keep the TOKEN legs, not let the SOL
+// dust overwrite the sent side.
+func TestConvertHeliusSwapNetsLegsAndIgnoresRentDust(t *testing.T) {
+	t.Parallel()
+
+	usdc := "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	bonk := "DezXAZ8z7PnrnRJjz3wXBoRgixCa6xjnB7YaB1pPB263"
+	txs := convertHeliusTx(heliusEnhancedTx{
+		Signature: "sig-route",
+		Type:      "SWAP",
+		Source:    "JUPITER",
+		Fee:       5000,
+		FeePayer:  "wallet",
+		Timestamp: 1700000000,
+		TokenTransfers: []heliusTokenTransfer{
+			// Multi-hop: two partial USDC out-legs to different pools.
+			{FromUserAccount: "wallet", ToUserAccount: "pool1", Mint: usdc, TokenAmount: json.Number("60")},
+			{FromUserAccount: "wallet", ToUserAccount: "pool2", Mint: usdc, TokenAmount: json.Number("40")},
+			{FromUserAccount: "pool2", ToUserAccount: "wallet", Mint: bonk, TokenAmount: json.Number("5000000")},
+		},
+		NativeTransfers: []heliusNativeTransfer{
+			// Rent for a fresh token account: must not become the sent leg.
+			{FromUserAccount: "wallet", ToUserAccount: "newata", Amount: 2039280},
+		},
+	}, "wallet")
+
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 swap row, got %d", len(txs))
+	}
+	tx := txs[0]
+	if tx.Asset != usdc || tx.Amount != "100" {
+		t.Fatalf("sent leg = %s %s, want 100 USDC mint", tx.Amount, tx.Asset)
+	}
+	if tx.Asset2 != bonk || tx.Amount2 != "5000000" {
+		t.Fatalf("received leg = %s %s, want 5000000 BONK mint", tx.Amount2, tx.Asset2)
+	}
+	if tx.Fee != "0.000005" || tx.FeeAsset != "SOL" {
+		t.Fatalf("fee = %q %q, want 0.000005 SOL (wallet is fee payer)", tx.Fee, tx.FeeAsset)
+	}
+}
+
+// A swap that is not a clean two-asset exchange must preserve every leg
+// rather than guessing or dropping the event.
+func TestConvertHeliusSwapFallsBackToLegPreservation(t *testing.T) {
+	t.Parallel()
+
+	txs := convertHeliusTx(heliusEnhancedTx{
+		Signature: "sig-multi",
+		Type:      "SWAP",
+		Source:    "JUPITER",
+		Timestamp: 1700000000,
+		TokenTransfers: []heliusTokenTransfer{
+			{FromUserAccount: "wallet", ToUserAccount: "pool", Mint: "MintAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA", TokenAmount: json.Number("10")},
+			{FromUserAccount: "pool", ToUserAccount: "wallet", Mint: "MintBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB", TokenAmount: json.Number("20")},
+			{FromUserAccount: "pool", ToUserAccount: "wallet", Mint: "MintCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC", TokenAmount: json.Number("30")},
+		},
+	}, "wallet")
+
+	if len(txs) != 3 {
+		t.Fatalf("expected 3 preserved legs, got %d", len(txs))
+	}
+	for _, tx := range txs {
+		if tx.RawType != "SWAP" {
+			t.Errorf("leg raw type = %q, want SWAP", tx.RawType)
+		}
+	}
+}
+
+// Fees on sponsored transactions belong to the sponsor, not the wallet.
+func TestHeliusFeeRequiresWalletAsFeePayer(t *testing.T) {
+	t.Parallel()
+
+	txs := convertHeliusTx(heliusEnhancedTx{
+		Signature: "sig-sponsored",
+		Type:      "TRANSFER",
+		Fee:       5000,
+		FeePayer:  "sponsor",
+		Timestamp: 1700000000,
+		TokenTransfers: []heliusTokenTransfer{{
+			FromUserAccount: "wallet",
+			ToUserAccount:   "dest",
+			Mint:            "MintAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+			TokenAmount:     json.Number("5"),
+		}},
+	}, "wallet")
+
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 row, got %d", len(txs))
+	}
+	if txs[0].Fee != "" {
+		t.Fatalf("fee = %q, want empty (sponsor paid)", txs[0].Fee)
+	}
+}
+
+// Wrap/unwrap legs (wSOL mint vs native SOL) must net as one asset.
+func TestConvertHeliusSwapMergesWrappedSOL(t *testing.T) {
+	t.Parallel()
+
+	usdc := "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v"
+	txs := convertHeliusTx(heliusEnhancedTx{
+		Signature: "sig-wsol",
+		Type:      "SWAP",
+		Source:    "RAYDIUM",
+		FeePayer:  "wallet",
+		Fee:       5000,
+		Timestamp: 1700000000,
+		TokenTransfers: []heliusTokenTransfer{
+			// wSOL leg out of the wallet's temp account.
+			{FromUserAccount: "wallet", ToUserAccount: "pool", Mint: wrappedSOLMint, TokenAmount: json.Number("1.5")},
+			{FromUserAccount: "pool", ToUserAccount: "wallet", Mint: usdc, TokenAmount: json.Number("210")},
+		},
+		NativeTransfers: []heliusNativeTransfer{
+			// Unwrap refund back to the wallet.
+			{FromUserAccount: "tempacct", ToUserAccount: "wallet", Amount: 500000000},
+		},
+	}, "wallet")
+
+	if len(txs) != 1 {
+		t.Fatalf("expected 1 swap row, got %d", len(txs))
+	}
+	tx := txs[0]
+	if tx.Asset != "SOL" || tx.Amount != "1" {
+		t.Fatalf("sent leg = %s %s, want net 1 SOL", tx.Amount, tx.Asset)
+	}
+	if tx.Asset2 != usdc || tx.Amount2 != "210" {
+		t.Fatalf("received leg = %s %s, want 210 USDC mint", tx.Amount2, tx.Asset2)
 	}
 }

@@ -5,17 +5,18 @@ module Lot
   , empty
   , acquire
   , dispose
+  , holdingPeriod
   , totalCostBasis
   , totalUnits
   ) where
 
-import           Data.Map.Strict (Map)
-import qualified Data.Map.Strict as Map
-import           Data.Ratio      (numerator, denominator)
-import           Data.Text       (Text)
-import qualified Data.Text       as T
-import           Data.Time       (UTCTime)
-import           Data.Time.Clock (diffUTCTime, nominalDay)
+import           Data.Map.Strict    (Map)
+import qualified Data.Map.Strict    as Map
+import           Data.Ratio         (numerator, denominator)
+import           Data.Text          (Text)
+import qualified Data.Text          as T
+import           Data.Time          (UTCTime, utctDay)
+import           Data.Time.Calendar (addGregorianYearsRollOver)
 import           Types
 
 -- | Per-asset FIFO queue. Each asset has a list of lots, oldest first.
@@ -39,14 +40,19 @@ acquire asset timestamp amount costBasisUSD queue =
       in Map.insertWith (\_ old -> old ++ [lot]) asset [lot] queue
 
 -- | Record a disposal. Pops lots from the FRONT (FIFO) and returns gain/loss
--- records plus the updated queue. Errors if insufficient lots exist.
+-- records plus the updated queue. Errors if insufficient lots exist or the
+-- disposal amount is negative (a contract violation, never a zero-gain no-op).
 dispose :: Disposal -> LotQueue -> Either Text ([GainLoss], LotQueue)
-dispose disp queue =
-  let asset = dispAsset disp
-      lots  = Map.findWithDefault [] asset queue
-  in case consumeLots disp (dispAmount disp) lots [] of
-       Left err             -> Left err
-       Right (gains, lots') -> Right (gains, updateLots asset lots' queue)
+dispose disp queue
+  | dispAmount disp < 0 =
+      Left $ "Negative disposal amount for " <> unAsset (dispAsset disp)
+           <> ": " <> showR (unTokens (dispAmount disp))
+  | otherwise =
+      let asset = dispAsset disp
+          lots  = Map.findWithDefault [] asset queue
+      in case consumeLots disp (dispAmount disp) lots [] of
+           Left err             -> Left err
+           Right (gains, lots') -> Right (gains, updateLots asset lots' queue)
 
 -- | Walk lots FIFO, consuming units until the disposal is satisfied.
 -- The Disposal is never mutated; @toConsume@ tracks remaining units.
@@ -92,10 +98,16 @@ mkGain disp lot amount basis proceeds = GainLoss
   , glPeriod    = holdingPeriod (lotAcquired lot) (dispTime disp)
   }
 
+-- | IRS holding-period rule: long-term requires holding MORE than one year.
+-- A sale on the one-year anniversary calendar date is still short-term, so the
+-- comparison is calendar-based on UTC trade dates rather than elapsed days.
+-- Feb 29 acquisitions roll over to Mar 1 (addGregorianYearsRollOver), the
+-- conservative choice that never overstates long-term treatment.
 holdingPeriod :: UTCTime -> UTCTime -> HoldingPeriod
 holdingPeriod acquired disposed =
-  let days = diffUTCTime disposed acquired / nominalDay
-  in if days > 365 then LongTerm else ShortTerm
+  if utctDay disposed > addGregorianYearsRollOver 1 (utctDay acquired)
+    then LongTerm
+    else ShortTerm
 
 -- | Total cost basis across all lots in the queue (for invariant checking).
 totalCostBasis :: LotQueue -> USD
@@ -112,7 +124,9 @@ updateLots asset lots queue
   | null lots  = Map.delete asset queue
   | otherwise  = Map.insert asset lots queue
 
--- | Render a Rational for error messages.
+-- | Render a Rational for error messages. Fractional digits are computed to
+-- 18 places (full wei precision) so sub-1e-6 shortfalls are not shown as zero;
+-- when the trimmed fractional part is empty, only the integer part is shown.
 showR :: Rational -> Text
 showR r =
   let sign = if r < 0 then "-" else ""
@@ -120,12 +134,13 @@ showR r =
       n = numerator r'
       d = denominator r'
       (q, rem') = n `divMod` d
-  in if rem' == 0
+      fracDigits = trimTrailingZeroes (pad18 (T.pack (show (rem' * 10 ^ (18 :: Int) `div` d))))
+  in if T.null fracDigits
      then sign <> T.pack (show q)
-     else sign <> T.pack (show q) <> "." <> trimTrailingZeroes (pad6 (T.pack (show (rem' * 1000000 `div` d))))
+     else sign <> T.pack (show q) <> "." <> fracDigits
 
-pad6 :: Text -> Text
-pad6 t = T.replicate (max 0 (6 - T.length t)) "0" <> t
+pad18 :: Text -> Text
+pad18 t = T.replicate (max 0 (18 - T.length t)) "0" <> t
 
 trimTrailingZeroes :: Text -> Text
 trimTrailingZeroes = T.dropWhileEnd (== '0')

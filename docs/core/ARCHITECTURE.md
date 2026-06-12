@@ -46,7 +46,7 @@ Important named constructs:
 - `handleFunding` treats positive `funding_payment` rows as income receipts and negative `funding_payment` rows as structured `FundingExpense` entries in `prFundingExpenses`.
 - `handlePerpOpen` is a no-op — perp opens do not create phantom lots.
 - `handlePerpClose` uses `txClosedPnl` to emit a `PerpPnlEntry` in `prPerpPnl`. If `closed_pnl` is absent, an error is recorded.
-- `TransferIn` and `TransferOut` rows currently leave the accumulator unchanged.
+- `TransferIn` and `TransferOut` rows are recorded as `TransferEntry` rows (no FIFO effect) and rendered to the supplemental `transfers.csv`.
 - `render8949CSV` renders only `prGainLosses` to CSV.
 - The CSV renderer quotes source-backed text fields that contain commas, quotes, or newlines so report rows remain parseable.
 
@@ -84,8 +84,8 @@ Important named constructs:
 - `Swap` is treated as one disposal plus one acquisition using the upstream USD legs already present in the IR.
 - `recordIncomeReceipt` captures income economically and now writes a separate `income.csv` supplemental report, but transfer-like rows still have no downstream structured output path.
 - Negative funding does not affect USDC inventory (no lot consumption). The structured expense report is informational.
-- `TransferIn` and `TransferOut` currently do not affect lots or final output.
+- `TransferIn` and `TransferOut` do not affect lots or the 8949; they are visible in `transfers.csv`.
 
 ## Notable current divergence from spec
 
-- `processTx` drops every `TransferIn` and `TransferOut` row without an error or explicit unsupported output. That means conservative upstream transfer-like rows do not remain visible once they reach the core. This is a concrete mismatch with the spec's surfacing requirement and is tracked in `docs/core/REVIEW.md`.
+- Resolved: transfer rows are no longer dropped silently; they surface in `transfers.csv` (see `docs/core/REVIEW.md` resolved history).

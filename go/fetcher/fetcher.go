@@ -32,9 +32,13 @@ type RawTransaction struct {
 	// For Helius token rows, Asset may be the mint while AssetSymbol remains
 	// blank unless the source explicitly provides a separate symbol.
 	AssetSymbol string
-	Amount      string // exact decimal string
-	Fee         string // exact decimal string
-	FeeAsset    string
+	// AssetCanonical is an optional source-backed canonical identity for
+	// Asset when one exists separately from the display string (e.g. the
+	// ERC-20 contract address behind an Etherscan tokenSymbol).
+	AssetCanonical string
+	Amount         string // exact decimal string
+	Fee            string // exact decimal string
+	FeeAsset       string
 
 	// For swaps: the other side of the trade.
 	Asset2       string

@@ -37,6 +37,8 @@ The core should not own:
 
 - the small local end-to-end golden fixture covering buy, sell, and own-wallet transfer behavior
 - FIFO lot accounting for supported normalized events that map cleanly into current core semantics
+- the IRS more-than-one-year calendar rule for the long-term holding period (anniversary-day sales are short-term; Feb 29 acquisitions roll to Mar 1; dates are UTC trade dates)
+- strict IR parsing: malformed decimal strings and unknown schema versions fail loudly instead of being silently misread
 
 ### Current-behavior-only
 
@@ -57,12 +59,16 @@ The core now supports three structured output channels beyond the 8949 CSV:
 
 3. **Perp realized PnL report** (`perp_pnl.csv`): Perp close events with exchange-reported `ClosedPnl` are emitted as `PerpPnlEntry` records. Canonical output intentionally keeps these rows separate from 8949 rather than forcing a derivative-specific cost-basis/proceeds representation into the 8949 CSV. Written only when perp PnL entries exist.
 
+4. **Transfers report** (`transfers.csv`): Own-wallet transfer rows are recorded as `TransferEntry` rows (non-taxable, no FIFO effect) so they stay visible downstream instead of disappearing in the core. Written only when transfer rows exist.
+
+Supplemental files are removed when their channel is empty on a re-run, so stale outputs from earlier runs cannot linger. An optional `--tax-year YYYY` flag restricts which rows are RENDERED in all reports (8949 by disposal date); lot accounting always processes full history. When any transaction cannot be processed, the reports are still written but the core prints an explicit incompleteness error and exits nonzero.
+
 Canonical output keeps income, perp realized PnL, and funding cash flows in separate supplemental channels from 8949.
 
 ## Immediate review priorities
 
 The highest-priority open semantics questions for the core are:
 
-- how unsupported transfer-like rows should remain visible downstream instead of disappearing in the core
+- wallet-by-wallet lot tracking (Rev. Proc. 2024-28, required for 2025+ tax years) — see `docs/repo/REVIEW.md`
 - incremental adoption of `asset_canonical` for lot tracking keys
-- whether any broader non-8949 output channels are needed beyond the current supplemental CSVs
+- in-kind fee (gas) consumption from inventory

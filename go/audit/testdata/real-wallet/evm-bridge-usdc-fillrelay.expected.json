@@ -1,7 +1,7 @@
 {
   "label": "evm-bridge-usdc-fillrelay",
   "category": "evm_bridge_pair",
-  "status": "documented_current_normalization",
+  "status": "documented_snapshot_normalization",
   "current_behavior_summary": "Current normalization keeps the Ethereum bridge candidate as two sell rows and the Arbitrum fillRelay candidate as one transfer_in row.",
   "group_human_confirmation_placeholder": "TODO confirm whether these tx ids are the same own-wallet bridge transfer and whether bridge-specific semantics should replace the current sell-plus-transfer representation.",
   "cases": [

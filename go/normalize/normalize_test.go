@@ -1,6 +1,7 @@
 package normalize
 
 import (
+	"strings"
 	"testing"
 	"time"
 
@@ -27,6 +28,8 @@ func TestNormalizeUsesExplicitWalletForOwnTransfer(t *testing.T) {
 			FeeAsset:  "ETH",
 		},
 		{
+			// The fetcher attributes the fee to the initiator only, so the
+			// receiver-side row arrives without fee data.
 			ID:        "0xabc",
 			Timestamp: 1700000000,
 			Source:    types.SourceEtherscan,
@@ -36,8 +39,6 @@ func TestNormalizeUsesExplicitWalletForOwnTransfer(t *testing.T) {
 			ToAddr:    "0xbbb",
 			Asset:     "ETH",
 			Amount:    "1.0",
-			Fee:       "0.01",
-			FeeAsset:  "ETH",
 		},
 	}
 
@@ -66,7 +67,7 @@ func TestNormalizeUsesExplicitWalletForOwnTransfer(t *testing.T) {
 		t.Fatalf("expected receiver counterparty 0xaaa, got %#v", txs[1].Counterparty)
 	}
 	if txs[1].Fee != nil {
-		t.Fatalf("expected receiver row to omit duplicated fee")
+		t.Fatalf("expected receiver row without fee data to carry none")
 	}
 }
 
@@ -173,10 +174,10 @@ func TestNormalizeHeliusUsesSourceBackedSymbolForDisplayAndPricing(t *testing.T)
 		Source:       types.SourceHelius,
 		Chain:        types.ChainSolana,
 		Wallet:       "wallet",
-		Asset:        "mint-in",
+		Asset:        "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 		AssetSymbol:  "usdc",
 		Amount:       "10.5",
-		Asset2:       "mint-out",
+		Asset2:       "Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB",
 		Asset2Symbol: "usdt",
 		Amount2:      "9.75",
 		RawType:      "SWAP/JUPITER",
@@ -191,10 +192,10 @@ func TestNormalizeHeliusUsesSourceBackedSymbolForDisplayAndPricing(t *testing.T)
 	if tx.Sent == nil || tx.Received == nil {
 		t.Fatalf("expected swap legs, got sent=%#v received=%#v", tx.Sent, tx.Received)
 	}
-	if tx.Sent.Asset != "USDC" || tx.Sent.USDValue != "10.50000000" {
+	if tx.Sent.Asset != "USDC" || tx.Sent.USDValue != "10.5" {
 		t.Fatalf("unexpected sent leg: %#v", tx.Sent)
 	}
-	if tx.Received.Asset != "USDT" || tx.Received.USDValue != "9.75000000" {
+	if tx.Received.Asset != "USDT" || tx.Received.USDValue != "9.75" {
 		t.Fatalf("unexpected received leg: %#v", tx.Received)
 	}
 }
@@ -254,7 +255,7 @@ func TestNormalizeWithDiagnosticsPartitionsValidAndInvalidRows(t *testing.T) {
 			Asset:     "BTC",
 			Amount:    "0.5",
 			USDPrice:  "15000",
-			RawType:   "BUY",
+			RawType:   "1099-DA-BUY",
 		},
 		{
 			ID:        "bad-tx",
@@ -275,7 +276,7 @@ func TestNormalizeWithDiagnosticsPartitionsValidAndInvalidRows(t *testing.T) {
 			Asset:     "ETH",
 			Amount:    "2.0",
 			USDPrice:  "4000",
-			RawType:   "BUY",
+			RawType:   "1099-DA-BUY",
 		},
 	}, []string{"rh-account"}, nil)
 
@@ -322,7 +323,7 @@ func TestNormalizeBackwardCompatibleWithSkippedRows(t *testing.T) {
 			Asset:     "BTC",
 			Amount:    "0.5",
 			USDPrice:  "15000",
-			RawType:   "BUY",
+			RawType:   "1099-DA-BUY",
 		},
 		{
 			ID:        "bad-tx",
@@ -422,8 +423,8 @@ func TestNormalizeHyperliquidPerpCloseEmitsPerpCloseWithClosedPnl(t *testing.T) 
 	if tx.ClosedPnl == nil {
 		t.Fatal("expected closed_pnl on perp close")
 	}
-	if *tx.ClosedPnl != "-42.50" {
-		t.Fatalf("expected closed_pnl %q, got %q", "-42.50", *tx.ClosedPnl)
+	if *tx.ClosedPnl != "-42.5" {
+		t.Fatalf("expected canonicalized closed_pnl %q, got %q", "-42.5", *tx.ClosedPnl)
 	}
 	if tx.EventGroupID == nil || *tx.EventGroupID != "hyperliquid:fill:fill-close-short" {
 		t.Fatalf("expected event_group_id %q, got %#v", "hyperliquid:fill:fill-close-short", tx.EventGroupID)
@@ -534,7 +535,7 @@ func TestNormalizeHeliusAssetCanonicalNilWhenNoSymbol(t *testing.T) {
 func TestNormalizeHeliusPumpfunMintRemainsConservativeWithoutSourceSymbol(t *testing.T) {
 	t.Parallel()
 
-	mint := "CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP"
+	mint := "CMMNJETQSDR79XaLkttgQjaQwuWqzuLifLJT8F7mpump"
 	tx, err := normalizeOne(fetcher.RawTransaction{
 		ID:        "PbxPFcX7JQF6PuTMjRs2xKuC2azpAmnc1uALwYxCKuwnWFT3vb156p17CZRYjcU1ySB1ANHSWgGfPEfHtE2QXKm",
 		Timestamp: time.Date(2025, 8, 3, 19, 22, 35, 0, time.UTC).Unix(),
@@ -564,5 +565,205 @@ func TestNormalizeHeliusPumpfunMintRemainsConservativeWithoutSourceSymbol(t *tes
 	}
 	if tx.Received.USDValue != "0" {
 		t.Fatalf("expected unresolved received usd_value 0, got %q", tx.Received.USDValue)
+	}
+}
+
+// Regression for the inverted-direction bug: a Hyperliquid spot SELL must
+// dispose of the asset and receive USDC — the old catch-all modeled every
+// unknown direction as a BUY.
+func TestNormalizeHyperliquidSpotSellIsNotInverted(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "fill-spot-sell",
+		Timestamp: 1700000000,
+		Source:    types.SourceHyperliquid,
+		Chain:     types.ChainHyperliquid,
+		Wallet:    "0xwallet",
+		Asset:     "HYPE",
+		Amount:    "10",
+		USDPrice:  "25",
+		RawType:   "Sell",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+
+	if tx.TxType != types.TxSwap {
+		t.Fatalf("expected tx_type swap, got %q", tx.TxType)
+	}
+	if tx.Sent == nil || tx.Sent.Asset != "HYPE" || tx.Sent.Amount != "10" {
+		t.Fatalf("expected sent leg 10 HYPE, got %#v", tx.Sent)
+	}
+	if tx.Received == nil || tx.Received.Asset != "USDC" || tx.Received.Amount != "250" {
+		t.Fatalf("expected received leg 250 USDC, got %#v", tx.Received)
+	}
+}
+
+func TestNormalizeHyperliquidSpotBuy(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "fill-spot-buy",
+		Timestamp: 1700000000,
+		Source:    types.SourceHyperliquid,
+		Chain:     types.ChainHyperliquid,
+		Wallet:    "0xwallet",
+		Asset:     "HYPE",
+		Amount:    "10",
+		USDPrice:  "25",
+		RawType:   "Buy",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+	if tx.Sent == nil || tx.Sent.Asset != "USDC" || tx.Sent.Amount != "250" {
+		t.Fatalf("expected sent leg 250 USDC, got %#v", tx.Sent)
+	}
+	if tx.Received == nil || tx.Received.Asset != "HYPE" {
+		t.Fatalf("expected received leg HYPE, got %#v", tx.Received)
+	}
+}
+
+// Direction flips realize the closed side's PnL and are modeled as closes.
+func TestNormalizeHyperliquidFlipIsPerpClose(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "fill-flip",
+		Timestamp: 1700000000,
+		Source:    types.SourceHyperliquid,
+		Chain:     types.ChainHyperliquid,
+		Wallet:    "0xwallet",
+		Asset:     "SOL",
+		Amount:    "20",
+		USDPrice:  "200",
+		RawType:   "Short > Long",
+		ClosedPnl: "13.37",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+	if tx.TxType != types.TxPerpClose {
+		t.Fatalf("expected flip to normalize as perp_close, got %q", tx.TxType)
+	}
+	if tx.ClosedPnl == nil || *tx.ClosedPnl != "13.37" {
+		t.Fatalf("expected closed_pnl 13.37, got %#v", tx.ClosedPnl)
+	}
+}
+
+// Unknown fill directions must be skipped with a diagnostic, never guessed.
+func TestNormalizeHyperliquidUnknownDirectionSkips(t *testing.T) {
+	t.Parallel()
+
+	result := NormalizeWithDiagnostics([]fetcher.RawTransaction{{
+		ID:        "fill-liquidation",
+		Timestamp: 1700000000,
+		Source:    types.SourceHyperliquid,
+		Chain:     types.ChainHyperliquid,
+		Wallet:    "0xwallet",
+		Asset:     "BTC",
+		Amount:    "0.5",
+		USDPrice:  "60000",
+		RawType:   "Liquidated Cross Long",
+	}}, []string{"0xwallet"}, nil)
+
+	if len(result.Transactions) != 0 {
+		t.Fatalf("expected unknown direction to be skipped, got %d transactions", len(result.Transactions))
+	}
+	if len(result.Skipped) != 1 || !strings.Contains(result.Skipped[0].Reason, "Liquidated Cross Long") {
+		t.Fatalf("expected diagnostic naming the direction, got %#v", result.Skipped)
+	}
+}
+
+// The IR boundary canonicalizes scientific notation — "1e-05" once reached
+// the Haskell parser verbatim and was corrupted into 62,705 units.
+func TestFinalizeCanonicalizesScientificNotation(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:        "rh-sci",
+		Timestamp: 1700000000,
+		Source:    types.SourceRobinhood,
+		Chain:     types.ChainRobinhood,
+		Wallet:    "robinhood",
+		Asset:     "SOL",
+		Amount:    "1e-05",
+		USDPrice:  "0.002",
+		RawType:   "1099-DA-SELL",
+	}, map[string]bool{}, nil)
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+	if tx.Sent.Amount != "0.00001" {
+		t.Fatalf("expected canonical amount 0.00001, got %q", tx.Sent.Amount)
+	}
+}
+
+// Negative amounts in non-funding rows are contract violations, not data.
+func TestFinalizeRejectsNegativeAmounts(t *testing.T) {
+	t.Parallel()
+
+	result := NormalizeWithDiagnostics([]fetcher.RawTransaction{{
+		ID:        "rh-negative",
+		Timestamp: 1700000000,
+		Source:    types.SourceRobinhood,
+		Chain:     types.ChainRobinhood,
+		Wallet:    "robinhood",
+		Asset:     "BTC",
+		Amount:    "-0.5",
+		USDPrice:  "100",
+		RawType:   "1099-DA-BUY",
+	}}, nil, nil)
+
+	if len(result.Skipped) != 1 || !strings.Contains(result.Skipped[0].Reason, "negative") {
+		t.Fatalf("expected negative-amount skip diagnostic, got %#v", result.Skipped)
+	}
+}
+
+// Zero/missing timestamps would warp FIFO order back to 1970.
+func TestNormalizeRejectsMissingTimestamp(t *testing.T) {
+	t.Parallel()
+
+	result := NormalizeWithDiagnostics([]fetcher.RawTransaction{{
+		ID:        "no-ts",
+		Timestamp: 0,
+		Source:    types.SourceRobinhood,
+		Chain:     types.ChainRobinhood,
+		Wallet:    "robinhood",
+		Asset:     "BTC",
+		Amount:    "1",
+		USDPrice:  "100",
+		RawType:   "1099-DA-BUY",
+	}}, nil, nil)
+
+	if len(result.Skipped) != 1 || !strings.Contains(result.Skipped[0].Reason, "timestamp") {
+		t.Fatalf("expected timestamp skip diagnostic, got %#v", result.Skipped)
+	}
+}
+
+// A scam token whose metadata claims "USDC" but whose mint is unverified
+// must not be valued at $1.
+func TestNormalizeHeliusFakeStablecoinIsNotPricedAtOneDollar(t *testing.T) {
+	t.Parallel()
+
+	tx, err := normalizeOne(fetcher.RawTransaction{
+		ID:          "scam-usdc",
+		Timestamp:   1700000000,
+		Source:      types.SourceHelius,
+		Chain:       types.ChainSolana,
+		Wallet:      "wallet",
+		FromAddr:    "scammer",
+		ToAddr:      "wallet",
+		Asset:       "FakeMintAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+		AssetSymbol: "USDC",
+		Amount:      "1000000",
+		RawType:     "TRANSFER",
+	}, map[string]bool{"wallet": true}, price.NewProvider())
+	if err != nil {
+		t.Fatalf("normalizeOne returned error: %v", err)
+	}
+	if tx.Received.USDValue != "0" {
+		t.Fatalf("fake USDC valued at %q, want 0 (unverified mint)", tx.Received.USDValue)
 	}
 }

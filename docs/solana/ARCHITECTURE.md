@@ -82,7 +82,7 @@ Important named constructs:
 
 - `convertSwap` chooses one wallet-touching outbound leg and one wallet-touching inbound leg. It does not model richer routing paths or internal account churn.
 - `normalizeHelius` defaults inbound non-swap rows to `transfer_in`, not `income`.
-- `formatTokenAmount` renders Helius `TokenAmount` through a `float64` path and emits 9 decimal places.
+- Helius `TokenAmount` is decoded as `json.Number` and flows through exact `big.Rat` arithmetic; swap legs are reconstructed from net per-asset balance change (see `docs/solana/QUIRKS.md`).
 - `price.Provider` only knows the small symbol map in `coingeckoIDs`, so mint-only Solana assets usually remain at `usd_value: "0"`. CoinGecko 429 responses are retried once by default and then surfaced as lookup errors rather than recursing indefinitely.
 
 ## Notable current divergence from spec

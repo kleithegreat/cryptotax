@@ -46,13 +46,16 @@ Go tests run from the nested module via:
 
 The Go implementation currently owns:
 
-- source-specific fetchers
+- source-specific fetchers (which also own fee attribution: a fee on a raw row means the wallet actually paid it)
 - raw transaction row construction
-- normalization into the JSON IR
+- normalization into the JSON IR, ending in the `finalizeTransaction` canonicalization boundary (canonical decimals, no negatives outside `closed_pnl`, classified tx_type — violations become structured skip diagnostics)
+- exact decimal-string arithmetic for all money paths in `go/decimal` (no float64 anywhere on a money path)
+- deterministic payload ordering in `types.SortTransactions` (timestamp, then acquisitions before disposals, then id/wallet)
+- wallet identity canonicalization in `types.CanonicalWallet` (EVM addresses fold to lowercase; Solana base58 stays exact)
 - transfer matching heuristics
-- price lookup integration
+- price lookup integration, identity-gated: a canonical on-chain identity (contract address / mint) decides the pricing symbol; unverified identities never price
 - audit capture/filter/summary tooling
-- current-behavior regression fixtures for selected real-wallet cases
+- snapshot-documentation fixtures for selected real-wallet cases
 
 ### Haskell side
 

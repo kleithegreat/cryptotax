@@ -11,6 +11,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kevin/cryptotax/decimal"
 	"github.com/kevin/cryptotax/types"
 )
 
@@ -58,8 +59,9 @@ type etherscanTx struct {
 	FunctionName string `json:"functionName"`
 	IsError      string `json:"isError"`
 	// Token transfer fields (only populated for tokentx action)
-	TokenSymbol  string `json:"tokenSymbol"`
-	TokenDecimal string `json:"tokenDecimal"`
+	TokenSymbol     string `json:"tokenSymbol"`
+	TokenDecimal    string `json:"tokenDecimal"`
+	ContractAddress string `json:"contractAddress"`
 }
 
 const (
@@ -69,23 +71,93 @@ const (
 )
 
 func (e *Etherscan) Fetch(wallet string) ([]RawTransaction, error) {
-	var allTxs []RawTransaction
-
 	// Fetch normal transactions
 	normal, err := e.fetchEndpoint(wallet, "txlist")
 	if err != nil {
 		return nil, fmt.Errorf("fetching normal txs: %w", err)
 	}
-	allTxs = append(allTxs, normal...)
 
 	// Fetch ERC-20 token transfers
 	tokens, err := e.fetchEndpoint(wallet, "tokentx")
 	if err != nil {
 		return nil, fmt.Errorf("fetching token txs: %w", err)
 	}
-	allTxs = append(allTxs, tokens...)
 
-	return allTxs, nil
+	return assembleRows(wallet, normal, tokens), nil
+}
+
+// assembleRows merges txlist and tokentx rows for one wallet and fixes up
+// gas-fee attribution, which the raw endpoints cannot express correctly:
+//
+//   - Gas is paid once per transaction, by the outer tx sender. The wallet
+//     paid it only if it initiated the tx, which is visible as a txlist row
+//     with from == wallet. Token rows in transactions initiated by someone
+//     else (e.g. an approved spender pulling tokens) carry no fee.
+//   - Within a wallet-initiated transaction the fee is attached to exactly
+//     one row, preferring a row with a nonzero amount so the fee survives
+//     downstream (zero-amount disposals are no-ops in the core).
+//   - A zero-value txlist row is an artifact of a contract call; when token
+//     rows exist for the same hash they carry the economics, so the artifact
+//     row is dropped after its fee migrates. Without token rows (e.g. a bare
+//     approve) the artifact row is kept so the gas evidence stays visible.
+func assembleRows(wallet string, normal, tokens []RawTransaction) []RawTransaction {
+	walletLower := strings.ToLower(wallet)
+
+	initiated := make(map[string]bool)
+	for _, tx := range normal {
+		if strings.ToLower(tx.FromAddr) == walletLower {
+			initiated[tx.ID] = true
+		}
+	}
+	tokenCount := make(map[string]int)
+	for _, tx := range tokens {
+		tokenCount[tx.ID]++
+	}
+
+	var rows []RawTransaction
+	for _, tx := range normal {
+		if initiated[tx.ID] && isZeroAmount(tx.Amount) && tokenCount[tx.ID] > 0 {
+			continue
+		}
+		rows = append(rows, tx)
+	}
+	rows = append(rows, tokens...)
+
+	byHash := make(map[string][]int)
+	for i := range rows {
+		byHash[rows[i].ID] = append(byHash[rows[i].ID], i)
+	}
+	for hash, idxs := range byHash {
+		holder := -1
+		if initiated[hash] {
+			for _, i := range idxs { // prefer a nonzero outbound row
+				if rows[i].Fee != "" && strings.ToLower(rows[i].FromAddr) == walletLower && !isZeroAmount(rows[i].Amount) {
+					holder = i
+					break
+				}
+			}
+			if holder < 0 { // fall back to any row carrying fee data
+				for _, i := range idxs {
+					if rows[i].Fee != "" {
+						holder = i
+						break
+					}
+				}
+			}
+		}
+		for _, i := range idxs {
+			if i != holder {
+				rows[i].Fee = ""
+			}
+		}
+	}
+
+	return rows
+}
+
+func isZeroAmount(amount string) bool {
+	sign, err := decimal.Sign(amount)
+	return err == nil && sign == 0
 }
 
 func (e *Etherscan) fetchEndpoint(wallet, action string) ([]RawTransaction, error) {
@@ -117,7 +189,9 @@ func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction
 	query.Set("action", action)
 	query.Set("address", wallet)
 	query.Set("startblock", "0")
-	query.Set("endblock", "99999999")
+	// No endblock: it defaults to the chain head. A fixed number would be a
+	// silent-truncation trap on chains like Arbitrum whose block numbers
+	// already exceed older hardcoded caps.
 	query.Set("sort", "asc")
 	query.Set("page", strconv.Itoa(page))
 	query.Set("offset", strconv.Itoa(etherscanPageSize))
@@ -127,7 +201,9 @@ func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction
 	for attempt := 0; ; attempt++ {
 		resp, err := e.Client.Get(endpoint.String())
 		if err != nil {
-			return nil, false, fmt.Errorf("%s %s request failed: %w", e.Chain, action, err)
+			// err may embed the full request URL (including the API key)
+			// via url.Error, so redact before surfacing.
+			return nil, false, fmt.Errorf("%s %s request failed: %s", e.Chain, action, e.redact(err.Error()))
 		}
 
 		body, readErr := io.ReadAll(resp.Body)
@@ -168,6 +244,10 @@ func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction
 		var txs []RawTransaction
 		for _, tx := range result {
 			if tx.IsError == "1" {
+				// Reverted transactions move no value. Their gas was still
+				// spent, but modeling gas on failed personal txs is an open
+				// tax-semantics question, so they are skipped (conservative:
+				// never overstates deductions). See docs/evm/QUIRKS.md.
 				continue
 			}
 
@@ -191,14 +271,32 @@ func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction
 			}
 
 			// Gas fee = gasUsed * gasPrice (in wei), converted to ether.
-			raw.Fee = weiToEther(multiplyBigInts(tx.GasUsed, tx.GasPrice))
+			// Rows without gas data simply carry no fee evidence; rows with
+			// unparseable gas data are a contract violation and fail loudly.
+			if tx.GasUsed != "" && tx.GasPrice != "" {
+				feeWei, err := multiplyBigInts(tx.GasUsed, tx.GasPrice)
+				if err != nil {
+					return nil, false, fmt.Errorf("%s %s tx %s gas: %w", e.Chain, action, tx.Hash, err)
+				}
+				raw.Fee, err = weiToEther(feeWei)
+				if err != nil {
+					return nil, false, fmt.Errorf("%s %s tx %s gas: %w", e.Chain, action, tx.Hash, err)
+				}
+			}
 
 			if action == "tokentx" {
 				raw.Asset = tx.TokenSymbol
-				raw.Amount = tokenToDecimal(tx.Value, tx.TokenDecimal)
+				raw.AssetCanonical = strings.ToLower(tx.ContractAddress)
+				raw.Amount, err = tokenToDecimal(tx.Value, tx.TokenDecimal)
+				if err != nil {
+					return nil, false, fmt.Errorf("%s %s tx %s token amount: %w", e.Chain, action, tx.Hash, err)
+				}
 			} else {
 				raw.Asset = "ETH"
-				raw.Amount = weiToEther(tx.Value)
+				raw.Amount, err = weiToEther(tx.Value)
+				if err != nil {
+					return nil, false, fmt.Errorf("%s %s tx %s value: %w", e.Chain, action, tx.Hash, err)
+				}
 			}
 
 			txs = append(txs, raw)
@@ -206,6 +304,14 @@ func (e *Etherscan) fetchPage(wallet, action string, page int) ([]RawTransaction
 
 		return txs, exhausted || len(result) < etherscanPageSize, nil
 	}
+}
+
+// redact removes the API key from text destined for errors or logs.
+func (e *Etherscan) redact(text string) string {
+	if e.APIKey == "" {
+		return text
+	}
+	return strings.ReplaceAll(text, e.APIKey, "***")
 }
 
 func (e *Etherscan) sleep(delay time.Duration) {
@@ -293,38 +399,40 @@ func compactJSONSnippet(body []byte) string {
 	return trimmed[:240] + "..."
 }
 
+// maxTokenDecimals bounds the 10^d divisor so hostile token metadata cannot
+// drive unbounded big.Int exponentiation. No real ERC-20 exceeds this.
+const maxTokenDecimals = 78
+
 // weiToEther converts a wei string to ether (divide by 1e18).
-func weiToEther(wei string) string {
+func weiToEther(wei string) (string, error) {
 	w, ok := new(big.Int).SetString(wei, 10)
 	if !ok {
-		return "0"
+		return "", fmt.Errorf("invalid wei amount %q", wei)
 	}
 	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil)
-	ether := new(big.Rat).SetFrac(w, divisor)
-	return ether.FloatString(18)
+	return decimal.String(new(big.Rat).SetFrac(w, divisor)), nil
 }
 
 // tokenToDecimal converts a raw token amount using the token's decimal places.
-func tokenToDecimal(value, decimals string) string {
+func tokenToDecimal(value, decimals string) (string, error) {
 	v, ok := new(big.Int).SetString(value, 10)
 	if !ok {
-		return "0"
+		return "", fmt.Errorf("invalid token amount %q", value)
 	}
 	d, err := strconv.Atoi(decimals)
-	if err != nil || d < 0 {
-		return "0"
+	if err != nil || d < 0 || d > maxTokenDecimals {
+		return "", fmt.Errorf("invalid token decimals %q", decimals)
 	}
 	divisor := new(big.Int).Exp(big.NewInt(10), big.NewInt(int64(d)), nil)
-	result := new(big.Rat).SetFrac(v, divisor)
-	return result.FloatString(d)
+	return decimal.String(new(big.Rat).SetFrac(v, divisor)), nil
 }
 
 // multiplyBigInts multiplies two integer strings.
-func multiplyBigInts(a, b string) string {
+func multiplyBigInts(a, b string) (string, error) {
 	bigA, ok1 := new(big.Int).SetString(a, 10)
 	bigB, ok2 := new(big.Int).SetString(b, 10)
 	if !ok1 || !ok2 {
-		return "0"
+		return "", fmt.Errorf("invalid integers %q, %q", a, b)
 	}
-	return new(big.Int).Mul(bigA, bigB).String()
+	return new(big.Int).Mul(bigA, bigB).String(), nil
 }

@@ -8,9 +8,13 @@ import (
 	"github.com/kevin/cryptotax/types"
 )
 
+var (
+	// Exact 1% tolerance — never built from a float.
+	ownTransferAmountTolerance     = big.NewRat(1, 100)
+	confirmedBridgeAmountTolerance = big.NewRat(1, 100)
+)
+
 const (
-	ownTransferAmountTolerance         = 0.01
-	confirmedBridgeAmountTolerance     = 0.01
 	ownTransferTimestampWindow         = 30 * time.Minute
 	confirmedBridgeTimestampWindow     = 10 * time.Minute
 	confirmedBridgeOutRawTypePrefix    = "bridge("
@@ -39,7 +43,7 @@ const (
 func MatchTransfers(txs []types.Transaction, wallets []string) []types.Transaction {
 	ownWallets := make(map[string]struct{}, len(wallets))
 	for _, wallet := range wallets {
-		ownWallets[strings.ToLower(wallet)] = struct{}{}
+		ownWallets[types.CanonicalWallet(wallet)] = struct{}{}
 	}
 
 	matched := make(map[int]bool)
@@ -75,7 +79,7 @@ func MatchTransfers(txs []types.Transaction, wallets []string) []types.Transacti
 }
 
 func isOwnWalletRef(ownWallets map[string]struct{}, wallet string) bool {
-	_, ok := ownWallets[strings.ToLower(wallet)]
+	_, ok := ownWallets[types.CanonicalWallet(wallet)]
 	return ok
 }
 
@@ -83,7 +87,7 @@ func isOwnCounterparty(ownWallets map[string]struct{}, counterparty *string) boo
 	if counterparty == nil {
 		return false
 	}
-	_, ok := ownWallets[strings.ToLower(*counterparty)]
+	_, ok := ownWallets[types.CanonicalWallet(*counterparty)]
 	return ok
 }
 
@@ -91,8 +95,8 @@ func counterpartiesMatch(left, right types.Transaction) bool {
 	if left.Counterparty == nil || right.Counterparty == nil {
 		return false
 	}
-	return strings.EqualFold(*left.Counterparty, right.Wallet) &&
-		strings.EqualFold(*right.Counterparty, left.Wallet)
+	return types.CanonicalWallet(*left.Counterparty) == types.CanonicalWallet(right.Wallet) &&
+		types.CanonicalWallet(*right.Counterparty) == types.CanonicalWallet(left.Wallet)
 }
 
 func isOwnWalletTransferPair(
@@ -136,7 +140,7 @@ func isConfirmedBridgeTransferPair(
 	if !isConfirmedBridgeTransferInCandidate(ownWallets, right) {
 		return false
 	}
-	if !strings.EqualFold(left.Wallet, right.Wallet) {
+	if types.CanonicalWallet(left.Wallet) != types.CanonicalWallet(right.Wallet) {
 		return false
 	}
 	if left.Chain == right.Chain {
@@ -221,7 +225,7 @@ func isPositiveDecimal(value string) bool {
 
 // amountsClose checks if two decimal string amounts are within the given
 // tolerance ratio of each other.
-func amountsClose(a, b string, tolerance float64) bool {
+func amountsClose(a, b string, tolerance *big.Rat) bool {
 	ra, ok1 := new(big.Rat).SetString(a)
 	rb, ok2 := new(big.Rat).SetString(b)
 	if !ok1 || !ok2 {
@@ -239,9 +243,11 @@ func amountsClose(a, b string, tolerance float64) bool {
 	if rb.Cmp(ra) > 0 {
 		maxVal.Set(rb)
 	}
+	if maxVal.Sign() <= 0 {
+		return false
+	}
 
 	ratio := new(big.Rat).Quo(diff, maxVal)
-	threshold := new(big.Rat).SetFloat64(tolerance)
 
-	return ratio.Cmp(threshold) <= 0
+	return ratio.Cmp(tolerance) <= 0
 }

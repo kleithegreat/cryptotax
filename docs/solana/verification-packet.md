@@ -30,7 +30,7 @@ For each case:
 
 **Exact unresolved question:**
 
-1. What is the received mint `CMMNJETQSDR79XALKTTGQJAQWUWQZULIFLJT8F7MPUMP`? Identify its symbol/name on the explorer.
+1. What is the received mint? NOTE 2026-06-11: the captured string is case-corrupted by the pre-c09615b uppercasing bug; the exact-case mint (preserved in `go/fetcher/helius_test.go`) is `CMMNJETQSDR79XaLkttgQjaQwuWqzuLifLJT8F7mpump` — a pump.fun token. Identify its symbol/name on the explorer using that exact-case form.
 2. Is the swap classification correct per the explorer instruction trace?
 3. Should the zero USD valuation stand as the permanent conservative stance (no supported pricing path for this token), or does a valuation source need to be adopted?
 
@@ -76,7 +76,7 @@ The explorer instruction trace should clarify whether funds were routed through 
 
 **Exact unresolved questions:**
 
-1. What is the mint `EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V`? Identify it on the explorer.
+1. ~~What is the mint `EPJFWDD5AUFQSSQEM2QN1XZYBAPC8G4WEGGKZWYTDT1V`?~~ ANSWERED 2026-06-11: it is the USDC mint `EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v`, case-corrupted by the pre-c09615b uppercasing bug. Fresh captures preserve exact casing.
 2. Is this transaction one economic swap, multiple internal account moves, or a combination?
 3. Which of the 10 rows represent real economic legs with value, and which are zero-amount bookkeeping artifacts?
 4. Is the 10-row explosion an acceptable conservative representation, or should it collapse into fewer economic rows?

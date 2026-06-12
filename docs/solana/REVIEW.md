@@ -6,12 +6,6 @@ This document tracks grounded gaps between `docs/solana/SPEC.md` and the current
 
 ## Open review items
 
-### Canonical mint identity is preserved separately in the IR
-
-- Status: `done`
-- Issue type: resolved
-- Resolution: Decision Option B adopted — `types.AssetAmount` gained an optional `asset_canonical` field in Go and Haskell. `normalizeHelius` now writes the displayed symbol into `asset` and the raw mint into `asset_canonical` when they differ. `TestNormalizeHeliusAssetCanonicalPopulatedWhenSymbolPresent` and `TestNormalizeHeliusAssetCanonicalNilWhenNoSymbol` in `go/normalize/normalize_test.go` freeze the behavior. Downstream adoption remains incremental, but the Solana-specific schema gap is resolved.
-
 ### Unresolved mint-only valuation is encoded as `usd_value: "0"` plus audit heuristics
 
 - Status: `open`
@@ -21,6 +15,7 @@ This document tracks grounded gaps between `docs/solana/SPEC.md` and the current
 - Desired direction implied by the spec: reviewers should be able to tell when a Solana leg is unpriced because identity or pricing support is unresolved, not merely see a literal zero.
 - What blocks resolution: neither `types.AssetAmount` nor the audit summary schema carries valuation provenance or an explicit unresolved-valuation reason.
 - Smallest good next checkpoint: add explicit unresolved-valuation surfacing for Solana rows before expanding valuation support claims.
+
 
 ### Current multi-row Solana output cannot clearly separate conservative preservation from routing artifacts
 
@@ -36,3 +31,7 @@ This document tracks grounded gaps between `docs/solana/SPEC.md` and the current
 
 - No guessed token symbols beyond source-backed Helius data.
 - No automatic promotion of inbound Solana rows from `transfer_in` to `income` without richer source evidence.
+
+## Resolved (kept as one-line history; details in git log)
+
+- **Canonical mint identity is preserved separately in the IR** — Decision Option B adopted — `types.AssetAmount` gained an optional `asset_canonical` field in Go and Haskell. `normalizeHelius` now writes the displayed symbol into `asset` and the raw mint into `asset_canonical` when...

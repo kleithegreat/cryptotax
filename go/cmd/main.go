@@ -6,7 +6,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"sort"
 	"strings"
 
 	"github.com/kevin/cryptotax/fetcher"
@@ -32,6 +31,7 @@ type runOptions struct {
 	normalizeOptions
 	coreCmd    string
 	outputFile string
+	taxYear    string
 	dryRun     bool
 }
 
@@ -79,7 +79,11 @@ func newRunCmd() *cobra.Command {
 
 			fmt.Fprintf(cmd.ErrOrStderr(), "Sending %d transactions to Haskell core...\n", len(payload.Transactions))
 
-			haskellCmd := exec.CommandContext(cmd.Context(), opts.coreCmd, "--output", opts.outputFile)
+			coreArgs := []string{"--output", opts.outputFile}
+			if opts.taxYear != "" {
+				coreArgs = append(coreArgs, "--tax-year", opts.taxYear)
+			}
+			haskellCmd := exec.CommandContext(cmd.Context(), opts.coreCmd, coreArgs...)
 			haskellCmd.Stdin = strings.NewReader(string(payloadJSON))
 			haskellCmd.Stdout = cmd.OutOrStdout()
 			haskellCmd.Stderr = cmd.ErrOrStderr()
@@ -96,6 +100,7 @@ func newRunCmd() *cobra.Command {
 	bindNormalizeFlags(runCmd, &opts.normalizeOptions)
 	runCmd.Flags().StringVar(&opts.coreCmd, "core", "cryptotax-core", "Path to Haskell core binary")
 	runCmd.Flags().StringVar(&opts.outputFile, "output", "8949_report.csv", "Output file path")
+	runCmd.Flags().StringVar(&opts.taxYear, "tax-year", "", "Restrict report rows to one calendar year (lots still use full history)")
 	runCmd.Flags().BoolVar(&opts.dryRun, "dry-run", false, "Print normalized JSON instead of running the core")
 
 	return runCmd
@@ -121,6 +126,10 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, []n
 	if len(opts.ethWallets) == 0 && len(opts.solWallets) == 0 && len(opts.hlWallets) == 0 && opts.robinhoodCSV == "" {
 		return types.TxPayload{}, nil, fmt.Errorf("no input source specified: provide at least one wallet flag or --robinhood-csv")
 	}
+	opts.ethWallets = uniqueWallets(opts.ethWallets)
+	opts.solWallets = uniqueWallets(opts.solWallets)
+	opts.hlWallets = uniqueWallets(opts.hlWallets)
+
 	if len(opts.ethWallets) > 0 && opts.etherscanKey == "" {
 		return types.TxPayload{}, nil, fmt.Errorf("etherscan API key required: pass --etherscan-key or set ETHERSCAN_API_KEY")
 	}
@@ -129,10 +138,6 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, []n
 	}
 
 	for _, ethWallet := range opts.ethWallets {
-		ethWallet = strings.TrimSpace(ethWallet)
-		if ethWallet == "" {
-			continue
-		}
 		wallets = appendUniqueWallet(wallets, walletSet, ethWallet)
 
 		ethFetcher := fetcher.NewEtherscan(opts.etherscanKey, 1, types.ChainEthereum)
@@ -153,10 +158,6 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, []n
 	}
 
 	for _, solWallet := range opts.solWallets {
-		solWallet = strings.TrimSpace(solWallet)
-		if solWallet == "" {
-			continue
-		}
 		wallets = appendUniqueWallet(wallets, walletSet, solWallet)
 
 		hFetcher := fetcher.NewHelius(opts.heliusKey)
@@ -169,10 +170,6 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, []n
 	}
 
 	for _, hlWallet := range opts.hlWallets {
-		hlWallet = strings.TrimSpace(hlWallet)
-		if hlWallet == "" {
-			continue
-		}
 		wallets = appendUniqueWallet(wallets, walletSet, hlWallet)
 
 		hlFetcher := fetcher.NewHyperliquid()
@@ -212,15 +209,43 @@ func buildPayload(opts normalizeOptions, stderr io.Writer) (types.TxPayload, []n
 
 	normalized = transfer.MatchTransfers(normalized, wallets)
 
-	sort.Slice(normalized, func(i, j int) bool {
-		return normalized[i].Timestamp.Before(normalized[j].Timestamp)
-	})
+	types.SortTransactions(normalized)
+
+	// Empty slices must marshal as [] — "transactions": null violates the
+	// schema and crashes the core's parser.
+	if normalized == nil {
+		normalized = []types.Transaction{}
+	}
+	if len(wallets) == 0 {
+		return types.TxPayload{}, nil, fmt.Errorf("no usable wallet identifiers after trimming input flags")
+	}
 
 	return types.TxPayload{
 		Version:      payloadVersion,
 		Wallets:      wallets,
 		Transactions: normalized,
 	}, result.Skipped, nil
+}
+
+// uniqueWallets trims, drops empties, and dedupes case-insensitively for
+// EVM-style addresses while preserving first-seen order — passing the same
+// wallet twice must not double-fetch (and double-count) its history.
+func uniqueWallets(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	var out []string
+	for _, v := range values {
+		v = strings.TrimSpace(v)
+		if v == "" {
+			continue
+		}
+		key := types.CanonicalWallet(v)
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, v)
+	}
+	return out
 }
 
 func marshalPayload(payload types.TxPayload) ([]byte, error) {
@@ -239,16 +264,15 @@ func envOrValue(value, envKey string) string {
 }
 
 func appendUniqueWallet(wallets []string, seen map[string]struct{}, wallet string) []string {
-	wallet = strings.TrimSpace(wallet)
-	if wallet == "" {
+	canonical := types.CanonicalWallet(wallet)
+	if canonical == "" {
 		return wallets
 	}
 
-	key := strings.ToLower(wallet)
-	if _, ok := seen[key]; ok {
+	if _, ok := seen[canonical]; ok {
 		return wallets
 	}
 
-	seen[key] = struct{}{}
-	return append(wallets, wallet)
+	seen[canonical] = struct{}{}
+	return append(wallets, canonical)
 }

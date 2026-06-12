@@ -63,7 +63,7 @@ Important named constructs:
 
 ### Current-behavior-only checkpoints
 
-- `go/audit/testdata/real-wallet/hyperliquid-funding.expected.json` freezes the current positive and negative funding normalization.
+- `go/audit/testdata/real-wallet/hyperliquid-funding.expected.json` documents positive and negative funding normalization as of its capture snapshot (it does not re-run the normalizer; see `docs/audit/ARCHITECTURE.md`).
 - `haskell/test/Spec.hs` freezes the current downstream behavior for positive and negative funding rows.
 - `docs/known-transactions.md` records current-behavior review targets for perp open and close cases such as `hl-open-long-btc` and `hl-close-short-sol`.
 

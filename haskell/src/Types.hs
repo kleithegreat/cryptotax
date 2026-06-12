@@ -20,6 +20,8 @@ module Types
   , IncomeEntry(..)
   , FundingExpense(..)
   , PerpPnlEntry(..)
+  , TransferDirection(..)
+  , TransferEntry(..)
   , parseDecimal
   ) where
 
@@ -51,25 +53,33 @@ newtype USD = USD { unUSD :: Rational }
 -- Exact decimal parsing — no floating point ever touches financial values
 -- ---------------------------------------------------------------------------
 
+-- | Parse a canonical decimal string: optional '-', one or more digits,
+-- optionally '.' followed by one or more digits. Anything else (empty string,
+-- "+5", "1.", ".5", scientific notation, whitespace) is a Go→Haskell contract
+-- violation: crash loudly instead of producing a silently wrong value.
 parseDecimal :: Text -> Rational
 parseDecimal t =
-  case T.splitOn "." t of
-    [whole]       -> fromIntegral (readInt whole)
-    [whole, frac] ->
-      let w     = readInt whole
-          f     = readUnsigned frac
-          scale = 10 ^ T.length frac
-          sign  = if T.isPrefixOf "-" whole then -1 else 1
-       in fromIntegral w + sign * (f % scale)
-    _ -> error $ "parseDecimal: invalid input: " ++ T.unpack t
+  case T.uncons t of
+    Just ('-', rest) -> negate (parseUnsigned rest)
+    _                -> parseUnsigned t
   where
-    readInt :: Text -> Integer
-    readInt s = case T.uncons s of
-      Just ('-', rest) -> negate (readUnsigned rest)
-      _                -> readUnsigned s
+    parseUnsigned :: Text -> Rational
+    parseUnsigned s = case T.splitOn "." s of
+      [whole] | allDigits whole -> fromInteger (readDigits whole)
+      [whole, frac] | allDigits whole && allDigits frac ->
+        fromInteger (readDigits whole) + readDigits frac % (10 ^ T.length frac)
+      _ -> malformed
 
-    readUnsigned :: Text -> Integer
-    readUnsigned = T.foldl' (\acc c -> acc * 10 + fromIntegral (fromEnum c - fromEnum '0')) 0
+    allDigits :: Text -> Bool
+    allDigits s = not (T.null s) && T.all (\c -> c >= '0' && c <= '9') s
+
+    readDigits :: Text -> Integer
+    readDigits = T.foldl' (\acc c -> acc * 10 + fromIntegral (fromEnum c - fromEnum '0')) 0
+
+    malformed :: a
+    malformed = error $
+      "parseDecimal: malformed decimal (expected optional '-', digits, optional '.' and digits): "
+      ++ show t
 
 -- ---------------------------------------------------------------------------
 -- JSON payload types (mirrors schema/transactions.json)
@@ -251,6 +261,7 @@ data IncomeEntry = IncomeEntry
   , iiAsset     :: AssetSymbol
   , iiAmount    :: TokenAmount
   , iiUSDValue  :: USD
+  , iiMarket    :: Maybe Text  -- source market context (e.g. Hyperliquid coin)
   } deriving (Show, Eq)
 
 -- | A negative funding cash flow, kept separate from 8949 disposals and perp PnL.
@@ -260,6 +271,24 @@ data FundingExpense = FundingExpense
   , feAsset     :: AssetSymbol
   , feAmount    :: TokenAmount
   , feUSDValue  :: USD
+  , feMarket    :: Maybe Text  -- source market context (e.g. Hyperliquid coin)
+  } deriving (Show, Eq)
+
+-- | Direction of a wallet transfer relative to the reporting wallet.
+data TransferDirection = DirIn | DirOut
+  deriving (Show, Eq)
+
+-- | A non-taxable transfer row, preserved for visibility instead of being
+-- silently dropped. Transfers never touch FIFO lots.
+data TransferEntry = TransferEntry
+  { teTimestamp    :: UTCTime
+  , teTxId         :: Text
+  , teDirection    :: TransferDirection
+  , teAsset        :: AssetSymbol
+  , teAmount       :: TokenAmount
+  , teUSDValue     :: USD
+  , teWallet       :: Text
+  , teCounterparty :: Maybe Text
   } deriving (Show, Eq)
 
 -- | A realized perp PnL entry derived from the exchange's ClosedPnl field.

@@ -5,8 +5,12 @@ module Report
   , renderIncomeCSV
   , renderFundingExpenseCSV
   , renderPerpPnlCSV
+  , renderTransfersCSV
+  , renderUSD
   ) where
 
+import           Data.Maybe   (fromMaybe)
+import           Data.Ratio   (numerator, denominator)
 import           Data.Text    (Text)
 import qualified Data.Text    as T
 import           Data.Time    (UTCTime, formatTime, defaultTimeLocale)
@@ -21,13 +25,19 @@ render8949CSV gains =
 
 renderRow :: GainLoss -> Text
 renderRow gl =
-  csvRow
+  -- The gain column is rendered from the SUBTRACTION OF THE ROUNDED CENTS of
+  -- proceeds and basis, so the printed columns always satisfy
+  -- Gain = Proceeds - Cost Basis. Display-level only; internal Rationals are
+  -- untouched.
+  let proceedsCents = usdCents (glProceeds gl)
+      basisCents    = usdCents (glCostBasis gl)
+  in csvRow
     [ renderDescription gl
     , formatDate (glAcquired gl)
     , formatDate (glDisposed gl)
-    , renderUSD (glProceeds gl)
-    , renderUSD (glCostBasis gl)
-    , renderUSD (glGain gl)
+    , renderCents proceedsCents
+    , renderCents basisCents
+    , renderCents (proceedsCents - basisCents)
     , case glPeriod gl of
         ShortTerm -> "Short"
         LongTerm  -> "Long"
@@ -39,23 +49,37 @@ renderDescription gl = renderAmount (glAmount gl) <> " " <> unAsset (glAsset gl)
 formatDate :: UTCTime -> Text
 formatDate = T.pack . formatTime defaultTimeLocale "%m/%d/%Y"
 
--- | Render a USD value with 2 decimal places. Negative in parentheses per IRS.
-renderUSD :: USD -> Text
-renderUSD (USD r) =
-  let cents = round (r * 100) :: Integer
-      (dollars, remainCents) = abs cents `divMod` 100
+-- | Round a USD value to whole cents, half away from zero (NOT banker's
+-- rounding, which would make printed columns disagree on .5 boundaries).
+usdCents :: USD -> Integer
+usdCents (USD r) =
+  let scaled = r * 100
+      n = abs (numerator scaled)
+      d = denominator scaled
+      q = (2 * n + d) `div` (2 * d)
+  in if scaled < 0 then negate q else q
+
+-- | Render whole cents with 2 decimal places. Negative in parentheses per IRS.
+renderCents :: Integer -> Text
+renderCents cents =
+  let (dollars, remainCents) = abs cents `divMod` 100
       formatted = T.pack (show dollars) <> "." <> padZero (T.pack (show remainCents))
   in if cents < 0
      then "(" <> formatted <> ")"
      else formatted
 
--- | Render a token amount with up to 8 decimal places.
+-- | Render a USD value with 2 decimal places, rounding half away from zero.
+renderUSD :: USD -> Text
+renderUSD = renderCents . usdCents
+
+-- | Render a token amount with up to 18 decimal places (full wei precision)
+-- so sub-1e-8 disposals do not display as zero.
 renderAmount :: TokenAmount -> Text
 renderAmount (TokenAmount r) =
-  let scaled = round (r * 100000000) :: Integer
-      (whole, frac) = abs scaled `divMod` 100000000
+  let scaled = round (r * 10 ^ (18 :: Int)) :: Integer
+      (whole, frac) = abs scaled `divMod` (10 ^ (18 :: Int))
       sign = if scaled < 0 then "-" else ""
-      fracStr = T.dropWhileEnd (== '0') (padN 8 (T.pack (show frac)))
+      fracStr = T.dropWhileEnd (== '0') (padN 18 (T.pack (show frac)))
   in sign <> T.pack (show whole) <> if T.null fracStr then "" else "." <> fracStr
 
 padZero :: Text -> Text
@@ -68,10 +92,13 @@ padN n t = T.replicate (max 0 (n - T.length t)) "0" <> t
 -- Supplemental reports — separate from 8949
 -- ---------------------------------------------------------------------------
 
--- | Render ordinary income as a structured CSV.
+-- | Render ordinary income as a structured CSV. The Market column carries the
+-- source market context when preserved (empty when absent); committed
+-- Hyperliquid funding rows share an all-zero hash, so Market is the only
+-- useful discriminator there.
 renderIncomeCSV :: [IncomeEntry] -> Text
 renderIncomeCSV entries =
-  let header = "Date,Tx ID,Asset,Amount,USD Value"
+  let header = "Date,Tx ID,Asset,Amount,USD Value,Market"
       rows   = map renderIncomeRow entries
   in T.unlines (header : rows)
 
@@ -83,12 +110,14 @@ renderIncomeRow ii =
     , unAsset (iiAsset ii)
     , renderAmount (iiAmount ii)
     , renderUSD (iiUSDValue ii)
+    , fromMaybe "" (iiMarket ii)
     ]
 
--- | Render funding expenses as a structured CSV.
+-- | Render funding expenses as a structured CSV. See 'renderIncomeCSV' for
+-- the Market column rationale.
 renderFundingExpenseCSV :: [FundingExpense] -> Text
 renderFundingExpenseCSV expenses =
-  let header = "Date,Tx ID,Asset,Amount,USD Value"
+  let header = "Date,Tx ID,Asset,Amount,USD Value,Market"
       rows   = map renderFundingRow expenses
   in T.unlines (header : rows)
 
@@ -100,6 +129,30 @@ renderFundingRow fe =
     , unAsset (feAsset fe)
     , renderAmount (feAmount fe)
     , renderUSD (feUSDValue fe)
+    , fromMaybe "" (feMarket fe)
+    ]
+
+-- | Render transfer activity as a structured CSV. Transfers are not taxable
+-- events; this output keeps them visible instead of silently dropping them.
+renderTransfersCSV :: [TransferEntry] -> Text
+renderTransfersCSV entries =
+  let header = "Date,Tx ID,Direction,Asset,Amount,USD Value,Wallet,Counterparty"
+      rows   = map renderTransferRow entries
+  in T.unlines (header : rows)
+
+renderTransferRow :: TransferEntry -> Text
+renderTransferRow te =
+  csvRow
+    [ formatDate (teTimestamp te)
+    , teTxId te
+    , case teDirection te of
+        DirIn  -> "In"
+        DirOut -> "Out"
+    , unAsset (teAsset te)
+    , renderAmount (teAmount te)
+    , renderUSD (teUSDValue te)
+    , teWallet te
+    , fromMaybe "" (teCounterparty te)
     ]
 
 -- | Render perp realized PnL as a structured CSV.
@@ -127,7 +180,13 @@ csvRow = T.intercalate "," . map csvField
 
 csvField :: Text -> Text
 csvField field
-  | T.any needsQuoting field = "\"" <> T.replace "\"" "\"\"" field <> "\""
-  | otherwise = field
+  | T.any needsQuoting guarded = "\"" <> T.replace "\"" "\"\"" guarded <> "\""
+  | otherwise = guarded
   where
+    -- Spreadsheet formula-injection guard: '=', '+', '@' can start a formula
+    -- in Excel/Sheets, so prefix a literal quote. '-' is deliberately NOT
+    -- guarded so negative numbers stay clean.
+    guarded = case T.uncons field of
+      Just (c, _) | c == '=' || c == '+' || c == '@' -> "'" <> field
+      _                                              -> field
     needsQuoting c = c == ',' || c == '"' || c == '\r' || c == '\n'

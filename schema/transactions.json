@@ -32,7 +32,7 @@
       "properties": {
         "id": {
           "type": "string",
-          "description": "Unique identifier. On-chain tx hash, or source-specific ID for CEX trades."
+          "description": "Source identifier: on-chain tx hash, or source-specific ID for CEX trades. NOT unique across rows — multi-leg events deliberately reuse one hash per leg, and Hyperliquid funding rows often share an all-zero hash. Use event_group_id to group legs; never dedupe by id."
         },
         "timestamp": {
           "type": "string",
@@ -130,11 +130,13 @@
         },
         "amount": {
           "type": "string",
-          "description": "Exact decimal amount as a string. NEVER a float. e.g. '1.234567890123456789'."
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$",
+          "description": "Exact canonical decimal amount as a string: optional '-', digits, optional fraction. NEVER a float, never scientific notation. e.g. '1.234567890123456789'."
         },
         "usd_value": {
           "type": "string",
-          "description": "Fair market value in USD at the time of the transaction, as a string. e.g. '3456.78'. Resolved by Go via CoinGecko or source-provided price."
+          "pattern": "^-?[0-9]+(\\.[0-9]+)?$",
+          "description": "Fair market value in USD at the time of the transaction, as a canonical decimal string. Resolved by Go via CoinGecko or source-provided price. '0' doubles as the unresolved-valuation sentinel when no price source is known; such rows are flagged in the audit summary (zero_usd_value_rows) rather than priced by guesswork."
         }
       }
     }

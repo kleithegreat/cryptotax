@@ -172,7 +172,7 @@ func buildAuditFilters(flagOpts auditFilterOptions) (audittool.Filters, error) {
 }
 
 func captureRerunCommand() string {
-	args := append([]string(nil), os.Args...)
+	args := redactSecretFlags(append([]string(nil), os.Args...))
 	prefix := strings.TrimSpace(os.Getenv("CRYPTOTAX_AUDIT_RERUN_PREFIX"))
 	if prefix == "" {
 		return audittool.ShellJoin(args)
@@ -182,4 +182,27 @@ func captureRerunCommand() string {
 		return strings.TrimSpace(prefix + " " + audittool.ShellJoin(args[2:]))
 	}
 	return strings.TrimSpace(prefix + " " + audittool.ShellJoin(args[1:]))
+}
+
+// redactSecretFlags masks API-key flag values so the persisted .command
+// re-run file never stores secrets. Both "--flag value" and "--flag=value"
+// forms are handled; the re-run still works because the keys also load from
+// the environment.
+func redactSecretFlags(args []string) []string {
+	secret := map[string]bool{"--etherscan-key": true, "--helius-key": true}
+	out := make([]string, len(args))
+	copy(out, args)
+	for i := 0; i < len(out); i++ {
+		if secret[out[i]] && i+1 < len(out) {
+			out[i+1] = "REDACTED"
+			i++
+			continue
+		}
+		for flag := range secret {
+			if strings.HasPrefix(out[i], flag+"=") {
+				out[i] = flag + "=REDACTED"
+			}
+		}
+	}
+	return out
 }

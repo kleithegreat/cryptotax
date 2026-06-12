@@ -57,3 +57,82 @@ func TestParseRobinhoodDateSupportsCompactDates(t *testing.T) {
 		t.Fatalf("expected %d, got %d", want, got)
 	}
 }
+
+// Substring matching used to misidentify these; resolution must be exact.
+func TestResolveCryptoSymbolExactness(t *testing.T) {
+	cases := map[string]string{
+		"Bitcoin":              "BTC",
+		"Bitcoin BTC":          "BTC",
+		"BITCOIN":              "BTC",
+		"Solana SOL":           "SOL",
+		"USDC":                 "USDC",
+		"USD Coin USDC":        "USDC",
+		"Shiba Inu SHIB":       "SHIB",
+		"Bitcoin Cash":         "", // must NOT collapse into BTC
+		"Bitcoin Cash BCH":     "",
+		"Ethereum Classic":     "",
+		"Ethereum Classic ETC": "",
+		"Wrapped Bitcoin":      "",
+		"Litecoin LTC":         "",
+		"":                     "",
+	}
+	for name, want := range cases {
+		if got := resolveCryptoSymbol(name); got != want {
+			t.Errorf("resolveCryptoSymbol(%q) = %q, want %q", name, got, want)
+		}
+	}
+}
+
+// Unmapped assets must be preserved verbatim, not dropped.
+func TestParseDARowPreservesUnmappedAssets(t *testing.T) {
+	r := NewRobinhood("unused")
+	header := []string{"1099-DA", "ACCOUNT NUMBER", "TAX YEAR", "DATE ACQUIRED", "SALE DATE", "DTIF NAME", "DTIF UNITS", "COST BASIS", "SALES PRICE", "TERM"}
+	colIdx := map[string]int{}
+	for i, col := range header[1:] {
+		colIdx[col] = i + 1
+	}
+
+	row := []string{"1099-DA", "ACC1", "2025", "01/15/2025", "03/20/2025", "Litecoin LTC", "2.5", "$100.00", "$150.00", "SHORT"}
+	txs := r.parseDARow(7, row, colIdx)
+	if len(txs) != 2 {
+		t.Fatalf("got %d rows, want buy+sell", len(txs))
+	}
+	for _, tx := range txs {
+		if tx.Asset != "Litecoin LTC" {
+			t.Errorf("asset = %q, want verbatim DTIF name", tx.Asset)
+		}
+	}
+}
+
+// "VARIOUS" acquisition dates must not abort the fetch; the disposition leg
+// is still emitted so the missing basis surfaces loudly in the core.
+func TestParseDARowVariousAcquiredDate(t *testing.T) {
+	r := NewRobinhood("unused")
+	header := []string{"1099-DA", "ACCOUNT NUMBER", "DATE ACQUIRED", "SALE DATE", "DTIF NAME", "DTIF UNITS", "COST BASIS", "SALES PRICE"}
+	colIdx := map[string]int{}
+	for i, col := range header[1:] {
+		colIdx[col] = i + 1
+	}
+
+	row := []string{"1099-DA", "ACC1", "VARIOUS", "03/20/2025", "Solana SOL", "10", "$500.00", "$900.00"}
+	txs := r.parseDARow(3, row, colIdx)
+	if len(txs) != 1 {
+		t.Fatalf("got %d rows, want only the disposition", len(txs))
+	}
+	if txs[0].RawType != "1099-DA-SELL" || txs[0].Asset != "SOL" {
+		t.Errorf("unexpected row: %+v", txs[0])
+	}
+}
+
+// A consolidated 1099 without a 1099-DA section must error, not silently
+// produce zero transactions.
+func TestParse1099DAMissingSectionErrors(t *testing.T) {
+	r := NewRobinhood("test.csv")
+	records := [][]string{
+		{"1099-B", "ACCOUNT NUMBER", "DESCRIPTION"},
+		{"1099-B", "ACC1", "SOME ETF"},
+	}
+	if _, err := r.parse1099DA(records); err == nil {
+		t.Fatal("expected error for missing 1099-DA section")
+	}
+}

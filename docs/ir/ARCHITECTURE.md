@@ -61,14 +61,15 @@ Important named constructs:
 ### Implemented behavior
 
 - Every normalized row carries an explicit `wallet` copied from the raw row.
-- Decimal quantities and USD values stay as strings in Go and are parsed to exact `Rational` values by `parseDecimal` in the Haskell core.
+- Decimal quantities and USD values stay as exact decimal strings in Go end to end (the `go/decimal` package centralizes parsing/rendering; CoinGecko prices are captured as `json.Number`, never `float64`) and are parsed to exact `Rational` values by `parseDecimal` in the Haskell core.
+- `finalizeTransaction` in `go/normalize/normalize.go` is the single IR exit point: every amount, usd_value, and closed_pnl is canonicalized (no scientific notation, no negatives outside closed_pnl) or the row is skipped with a diagnostic. The Haskell `parseDecimal` is strict and crashes loudly on anything non-canonical.
 - The payload shape is stable enough for both direct CLI use and test fixtures.
 
 ### Current-behavior-only checkpoints
 
 - `go/normalize/normalize_test.go` freezes several normalization decisions, including Hyperliquid funding market propagation, Hyperliquid perp grouping metadata, and Solana mint-versus-symbol handling.
 - `go/transfer/match_test.go` freezes the narrow confirmed bridge relabeling behavior.
-- `go/audit/testdata/real-wallet/*.expected.json` freezes selected real-wallet normalized payloads without claiming semantic or tax correctness.
+- `go/audit/testdata/real-wallet/*.expected.json` documents selected real-wallet normalized payloads as of their capture snapshot, without claiming semantic or tax correctness.
 
 ### Unsupported but surfaced behavior
 

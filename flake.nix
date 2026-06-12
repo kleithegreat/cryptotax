@@ -56,6 +56,20 @@
           };
         };
 
+        # Separate derivation without subPackages so `go test ./...` covers
+        # every package, not just cmd (the cli build tests cmd alone).
+        goTests = pkgs.buildGoModule {
+          pname = "cryptotax-go-tests";
+          version = "0.1.0";
+          src = ./.;
+          modRoot = "./go";
+          vendorHash = "sha256-hocnLCzWN8srQcO3BMNkd2lt0m54Qe7sqAhUxVZlz1k=";
+          doCheck = true;
+          meta = commonMeta // {
+            description = "cryptotax Go test suite";
+          };
+        };
+
         bundle = pkgs.symlinkJoin {
           name = "cryptotax-bundle";
           paths = [ cli core ];
@@ -141,6 +155,7 @@
 
         checks = {
           go-build = cli;
+          go-tests = goTests;
           core-build = core;
           hs-tests = pkgs.haskell.lib.doCheck core;
         };
