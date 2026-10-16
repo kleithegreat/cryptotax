@@ -1,5 +1,5 @@
 {
-  description = "cryptotax - Crypto tax report generator (Go plumbing + Haskell core)";
+  description = "cryptotax — US crypto tax reports (Go source plumbing + Haskell lot accounting)";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
@@ -10,156 +10,74 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = nixpkgs.legacyPackages.${system};
-        lib = pkgs.lib;
-        hsPkgs = pkgs.haskellPackages;
-        commonMeta = {
+        inherit (pkgs) lib;
+        meta = {
           license = lib.licenses.mit;
           platforms = lib.platforms.unix;
         };
 
-        devShell = pkgs.mkShell {
-          packages = with pkgs; [
-            go
-            gopls
-            gotools
-            go-tools
-            ghc
-            cabal-install
-            haskell-language-server
-            haskellPackages.QuickCheck
-            jq
-          ];
-        };
-
-        core = (hsPkgs.callCabal2nix "cryptotax-core" ./haskell { }).overrideAttrs (old: {
-          meta = (old.meta or { }) // commonMeta // {
+        core = (pkgs.haskellPackages.callCabal2nix "cryptotax-core" ./haskell { }).overrideAttrs (old: {
+          meta = (old.meta or { }) // meta // {
             mainProgram = "cryptotax-core";
-            description = "Haskell financial core for crypto tax lot accounting";
+            description = "Lot accounting and tax reports for the cryptotax IR";
           };
         });
 
+        # The Go module has no dependencies, so there is nothing to vendor;
+        # doCheck runs the whole Go test suite as part of the build.
         cli = pkgs.buildGoModule {
           pname = "cryptotax";
-          version = "0.1.0";
-          src = ./.;
-          modRoot = "./go";
-          subPackages = [ "cmd" ];
-          vendorHash = "sha256-hocnLCzWN8srQcO3BMNkd2lt0m54Qe7sqAhUxVZlz1k=";
-          postInstall = ''
-            if [ -e "$out/bin/cmd" ]; then
-              mv "$out/bin/cmd" "$out/bin/cryptotax"
-            fi
+          version = "0.2.0";
+          src = ./go;
+          vendorHash = null;
+          subPackages = [ "cmd/cryptotax" ];
+          preCheck = ''
+            unset subPackages
           '';
-          meta = commonMeta // {
+          meta = meta // {
             mainProgram = "cryptotax";
-            description = "Crypto tax report generator";
+            description = "Fetch, classify and report crypto tax history";
           };
         };
 
-        # Separate derivation without subPackages so `go test ./...` covers
-        # every package, not just cmd (the cli build tests cmd alone).
-        goTests = pkgs.buildGoModule {
-          pname = "cryptotax-go-tests";
-          version = "0.1.0";
-          src = ./.;
-          modRoot = "./go";
-          vendorHash = "sha256-hocnLCzWN8srQcO3BMNkd2lt0m54Qe7sqAhUxVZlz1k=";
-          doCheck = true;
-          meta = commonMeta // {
-            description = "cryptotax Go test suite";
-          };
-        };
-
-        bundle = pkgs.symlinkJoin {
-          name = "cryptotax-bundle";
-          paths = [ cli core ];
-          meta = commonMeta // {
-            description = "Combined cryptotax CLI and Haskell core";
-          };
-        };
-
-        runApp = pkgs.writeShellApplication {
-          name = "cryptotax-run";
+        # `nix run` entry: the CLI with the core it was built with.
+        cryptotax = pkgs.writeShellApplication {
+          name = "cryptotax";
           runtimeInputs = [ cli core ];
           text = ''
-            exec ${lib.getExe cli} run --core ${lib.getExe core} "$@"
+            sub="''${1:-}"
+            shift || true
+            exec ${lib.getExe cli} "$sub" --core ${lib.getExe core} "$@"
           '';
-        };
-
-        dryRunApp = pkgs.writeShellApplication {
-          name = "cryptotax-dry-run";
-          runtimeInputs = [ cli ];
-          text = ''
-            exec ${lib.getExe cli} run --dry-run "$@"
-          '';
-        };
-
-        auditApp = pkgs.writeShellApplication {
-          name = "cryptotax-audit";
-          runtimeInputs = [ cli ];
-          text = ''
-            export CRYPTOTAX_AUDIT_RERUN_PREFIX='nix run .#audit --'
-            exec ${lib.getExe cli} audit "$@"
-          '';
+          meta = meta // { description = "cryptotax with its Haskell core"; };
         };
       in {
         packages = {
-          inherit cli core bundle;
-          default = bundle;
+          inherit cli core cryptotax;
+          default = cryptotax;
         };
 
-        apps = {
-          cli = {
-            type = "app";
-            program = lib.getExe cli;
-            meta = commonMeta // {
-              description = "Run the cryptotax Go CLI";
-            };
-          };
-          core = {
-            type = "app";
-            program = lib.getExe core;
-            meta = commonMeta // {
-              description = "Run the cryptotax Haskell financial core";
-            };
-          };
-          run = {
-            type = "app";
-            program = "${runApp}/bin/cryptotax-run";
-            meta = commonMeta // {
-              description = "Run the Go CLI with the flake-built Haskell core";
-            };
-          };
-          dry-run = {
-            type = "app";
-            program = "${dryRunApp}/bin/cryptotax-dry-run";
-            meta = commonMeta // {
-              description = "Run the Go CLI in --dry-run mode";
-            };
-          };
-          audit = {
-            type = "app";
-            program = "${auditApp}/bin/cryptotax-audit";
-            meta = commonMeta // {
-              description = "Run the Go CLI audit subcommands";
-            };
-          };
-          default = {
-            type = "app";
-            program = "${runApp}/bin/cryptotax-run";
-            meta = commonMeta // {
-              description = "Run the Go CLI with the flake-built Haskell core";
-            };
-          };
+        apps.default = {
+          type = "app";
+          program = lib.getExe cryptotax;
+          meta = meta // { description = "cryptotax report|events"; };
         };
 
         checks = {
-          go-build = cli;
-          go-tests = goTests;
-          core-build = core;
-          hs-tests = pkgs.haskell.lib.doCheck core;
+          inherit cli;
+          core = pkgs.haskell.lib.doCheck core;
         };
 
-        devShells.default = devShell;
+        devShells.default = pkgs.haskellPackages.shellFor {
+          packages = _: [ core ];
+          nativeBuildInputs = with pkgs; [
+            go
+            gopls
+            gotools
+            cabal-install
+            haskell-language-server
+            jq
+          ];
+        };
       });
 }

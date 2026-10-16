@@ -1,19 +1,7 @@
 # Build outputs
-bin/
 dist-newstyle/
 result
 result-*
-
-# Go
-go/vendor/
-
-# Haskell
-haskell/.cabal-sandbox/
-haskell/cabal.sandbox.config
-*.hi
-*.o
-*.dyn_hi
-*.dyn_o
 
 # Nix
 .direnv/
@@ -22,18 +10,17 @@ haskell/cabal.sandbox.config
 .env
 *.env.local
 
-# Output reports
-*_report.csv
-
-# Local full-wallet audit snapshots
-audit/normalized.json
-audit/normalized.json.command
-audit/*.skipped.json
-
-# Robinhood CSV exports (user data)
-data/*.csv
+# Broker exports (personal data)
+data/
 
 # OS
 .DS_Store
 
 .claude/
+
+# Personal configuration (wallet addresses, labels)
+cryptotax.json
+
+# Source response cache and generated reports
+.cache/
+reports/

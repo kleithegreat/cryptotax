@@ -3,8 +3,8 @@
 // The Go→Haskell IR contract requires canonical plain decimal strings
 // (optional '-', digits, optional fraction — never scientific notation).
 // Sources do not honor that on their own: Robinhood CSVs carry values like
-// "1e-05" and CoinGecko returns JSON floats. Everything that lands in the IR
-// must pass through Canon, which parses exactly and re-renders canonically.
+// "1e-05" and price APIs return JSON numbers. Everything that lands in the IR
+// is parsed exactly and re-rendered with String.
 package decimal
 
 import (
@@ -89,37 +89,6 @@ func Canon(s string) (string, error) {
 		return "", err
 	}
 	return String(r), nil
-}
-
-// Mul multiplies two decimal strings exactly.
-func Mul(a, b string) (string, error) {
-	ra, err := Parse(a)
-	if err != nil {
-		return "", err
-	}
-	rb, err := Parse(b)
-	if err != nil {
-		return "", err
-	}
-	return String(new(big.Rat).Mul(ra, rb)), nil
-}
-
-// Sign reports the sign of a decimal string (-1, 0, +1).
-func Sign(s string) (int, error) {
-	r, err := Parse(s)
-	if err != nil {
-		return 0, err
-	}
-	return r.Sign(), nil
-}
-
-// Abs returns the absolute value of a decimal string, canonicalized.
-func Abs(s string) (string, error) {
-	r, err := Parse(s)
-	if err != nil {
-		return "", err
-	}
-	return String(new(big.Rat).Abs(r)), nil
 }
 
 // terminatingScale returns the number of fractional digits needed to render

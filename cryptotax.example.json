@@ -1,0 +1,49 @@
+{
+  "timezone": "America/New_York",
+  "first_year": 2023,
+  "wallets": {
+    "evm": ["0x0000000000000000000000000000000000000001"],
+    "solana": ["11111111111111111111111111111111"],
+    "hyperliquid": ["0x0000000000000000000000000000000000000001"]
+  },
+  "evm_chains": ["ethereum", "arbitrum"],
+  "robinhood_1099": ["data/robinhood-2025.csv"],
+  "counterparties": {
+    "RobinhoodDepositAddressGoesHere": {
+      "treat": "account",
+      "account": "robinhood",
+      "note": "my Robinhood SOL deposit address"
+    },
+    "RobinhoodHotWalletGoesHere": {
+      "treat": "account",
+      "account": "robinhood",
+      "basis": "fmv",
+      "note": "Robinhood withdrawals; coins bought there take their value at withdrawal as basis"
+    },
+    "0x00000000000000000000000000000000000000c0": {
+      "treat": "custody",
+      "basis": "fmv",
+      "note": "Coinbase"
+    },
+    "0x00000000000000000000000000000000000000f0": {
+      "treat": "third_party",
+      "note": "friend"
+    }
+  },
+  "overrides": {
+    "solana:5xExampleSignature": {
+      "treat": "income",
+      "reason": "airdrop"
+    },
+    "ethereum:0xexamplehash": {
+      "treat": "custody_in",
+      "basis": "1234.56",
+      "acquired": "2024-02-03",
+      "note": "bought on Coinbase on that date"
+    },
+    "solana:5xBridgeSourceSignature": {
+      "treat": "pair",
+      "with": "ethereum:0xbridgedestinationhash"
+    }
+  }
+}

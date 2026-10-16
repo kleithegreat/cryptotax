@@ -1,57 +1,33 @@
 cabal-version: 3.0
 name:          cryptotax-core
-version:       0.1.0.0
-synopsis:      Financial core for crypto tax calculations
+version:       0.2.0.0
+synopsis:      Lot accounting and tax reports for the cryptotax IR
 license:       MIT
 build-type:    Simple
-data-files:
-  testdata/*.json
-  testdata/*.csv
-extra-source-files:
-  testdata/*.json
-  testdata/*.csv
 
-executable cryptotax-core
-  main-is:          Main.hs
-  hs-source-dirs:   app, src
+common shared
   default-language: Haskell2010
-  ghc-options:      -Wall -Wcompat -O2
-
-  other-modules:
-    Types
-    Lot
-    GainLoss
-    Report
-
+  ghc-options:      -Wall -Wcompat
   build-depends:
     base       >= 4.14 && < 5,
     aeson      >= 2.0,
     bytestring >= 0.11,
-    directory  >= 1.3,
-    filepath   >= 1.4,
-    text       >= 1.2,
     containers >= 0.6,
+    text       >= 1.2,
     time       >= 1.9
 
+executable cryptotax-core
+  import:         shared
+  main-is:        Main.hs
+  hs-source-dirs: app, src
+  ghc-options:    -O2
+  other-modules:  Types, Lot, Engine, Report
+  build-depends:  directory >= 1.3, filepath >= 1.4
+
 test-suite cryptotax-core-test
-  type:             exitcode-stdio-1.0
-  main-is:          Spec.hs
-  hs-source-dirs:   test, src
-  default-language: Haskell2010
-  ghc-options:      -Wall
-
-  other-modules:
-    Types
-    Lot
-    GainLoss
-    Report
-    Paths_cryptotax_core
-
-  build-depends:
-    base       >= 4.14 && < 5,
-    aeson      >= 2.0,
-    bytestring >= 0.11,
-    text       >= 1.2,
-    containers >= 0.6,
-    time       >= 1.9,
-    QuickCheck >= 2.14
+  import:         shared
+  type:           exitcode-stdio-1.0
+  main-is:        Spec.hs
+  hs-source-dirs: test, src
+  other-modules:  Types, Lot, Engine, Report
+  build-depends:  QuickCheck >= 2.14

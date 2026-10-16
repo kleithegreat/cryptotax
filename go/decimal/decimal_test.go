@@ -40,37 +40,3 @@ func TestCanonRejectsInvalid(t *testing.T) {
 		}
 	}
 }
-
-func TestMul(t *testing.T) {
-	got, err := Mul("0.1", "0.2")
-	if err != nil {
-		t.Fatalf("Mul error: %v", err)
-	}
-	if got != "0.02" {
-		t.Errorf("Mul(0.1, 0.2) = %q, want 0.02", got)
-	}
-
-	got, err = Mul("123456789.123456789", "1000000000")
-	if err != nil {
-		t.Fatalf("Mul error: %v", err)
-	}
-	if got != "123456789123456789" {
-		t.Errorf("large Mul = %q, want 123456789123456789", got)
-	}
-
-	if _, err := Mul("x", "1"); err == nil {
-		t.Error("Mul with invalid input should error")
-	}
-}
-
-func TestSignAbs(t *testing.T) {
-	if s, _ := Sign("-3.2"); s != -1 {
-		t.Errorf("Sign(-3.2) = %d", s)
-	}
-	if s, _ := Sign("0.000"); s != 0 {
-		t.Errorf("Sign(0.000) = %d", s)
-	}
-	if a, _ := Abs("-3.20"); a != "3.2" {
-		t.Errorf("Abs(-3.20) = %q", a)
-	}
-}

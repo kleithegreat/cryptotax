@@ -1,198 +1,52 @@
 # cryptotax
 
-A crypto tax report generator that fetches transaction history from multiple
-chains, normalizes it in Go, and runs it through a formally typed Haskell
-financial core to produce IRS Form 8949 reports.
+US crypto tax reports (Form 8949, Schedule D totals, ordinary income) for
+tax years 2023 onward, from:
 
-The Haskell core uses exact `Rational` arithmetic for lot accounting. The Go
-side is deliberately conservative and best-effort: plain transfers are modeled
-well, while richer semantic reconstruction such as multi-leg EVM swaps/bridges
-and Hyperliquid perps still needs explicit review.
+| Source      | What is read                                              | Key                 |
+|-------------|-----------------------------------------------------------|---------------------|
+| Ethereum, Arbitrum | every transaction, internal transfer, token and NFT transfer (Etherscan v2) | `ETHERSCAN_API_KEY` |
+| Solana      | raw transactions of the wallet and all its token accounts | `HELIUS_API_KEY`    |
+| Hyperliquid | perp fills, funding, deposits/withdrawals/transfers       | none                |
+| Robinhood   | Form 1099-DA section of the consolidated 1099 CSV         | none                |
+| DefiLlama   | historical USD prices by contract/mint                    | none                |
 
-## Architecture
+The tax treatments, and the authority for each, are in `docs/core.md`.
 
-```
-┌──────────────────────────────────────────────────┐
-│  Go binary (plumbing)                            │
-│                                                  │
-│  CLI → Fetchers → Normalizer → Transfer Matcher  │
-│         │  │  │  │                               │
-│         │  │  │  └─ Robinhood (CSV)              │
-│         │  │  └──── Hyperliquid (REST, no key)   │
-│         │  └─────── Helius/Solana (REST)         │
-│         └────────── Etherscan V2 (ETH + ARB)     │
-│                                                  │
-│  CoinGecko price resolution for USD values       │
-└──────────────────┬───────────────────────────────┘
-                   │ JSON via stdin
-┌──────────────────▼───────────────────────────────┐
-│  Haskell binary (financial core)                 │
-│                                                  │
-│  Types (Rational arithmetic, no floats)          │
-│  → FIFO Lot Tracker                              │
-│  → Gain/Loss Engine                              │
-│  → Form 8949 CSV Report                          │
-│                                                  │
-│  QuickCheck property tests on all invariants     │
-└──────────────────────────────────────────────────┘
-```
-
-The two binaries communicate via a JSON intermediate representation defined in
-`schema/transactions.json`. All financial amounts are strings. The Go side
-normalizes source-specific data into that IR, and the Haskell side parses those
-strings into exact `Rational` values.
-
-## Prerequisites
-
-- [Nix](https://nixos.org/download/) with flakes enabled
-- [direnv](https://direnv.net/) (optional)
-
-## Getting started
+## Use
 
 ```bash
-# Enter the development shell
-cd cryptotax
-nix develop
-# or: direnv allow
-
-# Build the binaries
-nix build .#cli
-nix build .#core
-
-# Inspect normalized JSON without invoking the Haskell core
-nix run .#dry-run -- \
-  --eth-wallet 0x... \
-  --sol-wallet ... \
-  --hl-wallet ... \
-  --robinhood-csv path/to/robinhood.csv
-
-# Capture normalized JSON for audit review and record the re-run command
-nix run .#audit -- capture audit/normalized.json \
-  --eth-wallet 0x... \
-  --sol-wallet ... \
-  --hl-wallet ... \
-  --robinhood-csv path/to/robinhood.csv
-
-# Filter or summarize a captured audit snapshot
-nix run .#audit -- filter audit/normalized.json --wallet 0x... --asset ETH
-nix run .#audit -- summary audit/normalized.json --wallet 0x...
-
-# Run the full pipeline with the flake-wrapped core binary
-nix run .#run -- \
-  --eth-wallet 0x... \
-  --sol-wallet ... \
-  --hl-wallet ... \
-  --robinhood-csv path/to/robinhood.csv \
-  --output 8949_report.csv
-
-# Validate the flake outputs and Haskell test suite
-nix flake check
+cp cryptotax.example.json cryptotax.json   # wallets, timezone, labels
+echo 'ETHERSCAN_API_KEY=…' >> .env; echo 'HELIUS_API_KEY=…' >> .env
+nix run . -- report                        # fetch, classify, write reports/
+nix run . -- report --offline              # rerun from the cached evidence
+nix run . -- events                        # the classified events, as JSON
 ```
 
-API keys can be passed explicitly with `--etherscan-key` / `--helius-key` or
-via `ETHERSCAN_API_KEY` / `HELIUS_API_KEY`. The CLI intentionally does not bake
-env-derived secrets into flag defaults, so `--help` output does not echo them.
+`reports/` gets, for each year: `form8949.csv`, `income.csv`,
+`holdings-end.csv` (lots at year end) and `summary.txt` (Schedule D lines
+and totals). Across all years it gets `review.csv`, `exported-lots.csv` (lots
+sent to your untracked exchange accounts, with their basis) and
+`events.json`. Every source response is kept in `.cache/` as evidence.
 
-The audit summary reports row counts by `source` and `tx_type`, exact
-sent/received/fee asset totals, and diagnostic row lists such as
-`zero_usd_value_rows` and `suspicious_asset_rows` for manual review.
-Rows that cannot be normalized are never dropped silently: they are written
-to a `.skipped.json` sidecar with a structured reason.
+## Review loop
 
-For reproducible manual review of normalized transactions, see
-`docs/audit-workflow.md` and the first verified fixture in
-`docs/known-transactions.md`.
+A blockchain cannot say whether an address is your exchange account, a
+friend, or a merchant. Anything the data cannot decide is a **blocking**
+line in `review.csv`, and the run prints PROVISIONAL (exit code 3) until
+none remain. Resolve each one in `cryptotax.json`:
 
-## Supported sources
+- `counterparties`: label an address once. Use `account` for a deposit
+  address of a tracked account such as Robinhood, `custody` for your own
+  untracked exchange account, `third_party` for someone else, and `spam`.
+- `overrides`: classify one movement by id. The treatments are `income`,
+  `spend`, `gift_out`, `lost`, `custody_out`, `custody_in`, `gift_in`, `spam`,
+  `ignore`, `trade` (confirm a lopsided exchange), `pair` (join two halves of
+  a bridge/swap), and `basis` (supply a broker sale's missing basis).
 
-| Source       | Method               | API key required | Chain(s)         |
-|-------------|----------------------|------------------|------------------|
-| Etherscan V2 | REST API            | Yes (free)       | Ethereum, Arbitrum |
-| Helius       | REST API            | Yes (free)       | Solana           |
-| Hyperliquid  | REST API            | No               | Hyperliquid      |
-| Robinhood    | CSV file export     | No               | N/A (CEX)        |
-| CoinGecko    | REST API (prices)   | No               | N/A              |
+Then rerun with `--offline`. The run also replays every account's history
+against its live balance and blocks on any difference, because a gap means
+missing history and therefore wrong basis.
 
-## How tax calculations work
-
-1. **Acquisition**: When you buy, receive income, or receive the "got" side of
-   a swap, a new tax lot is created with your cost basis (USD value at that time).
-
-2. **Disposal**: When you sell, send to someone, or send the "gave" side of a
-   swap, the FIFO engine pops lots from the oldest acquisition and computes
-   gain = proceeds - cost basis.
-
-3. **Transfers**: Clear own-wallet transfers are preserved as non-taxable
-   transfer rows. The core ignores them, which keeps aggregate basis intact.
-
-4. **Holding period**: long-term requires holding *more than one year*
-   (calendar rule, per IRS — a sale on the one-year anniversary date is
-   short-term; Feb 29 acquisitions roll over to Mar 1). Dates are UTC trade
-   dates.
-
-5. **Output**: Form 8949 CSV with one row per disposal, ready for TurboTax /
-   TaxAct / H&R Block import, plus supplemental CSVs written next to it when
-   non-empty: `income.csv` (ordinary income), `funding_expenses.csv`
-   (negative Hyperliquid funding, informational), `perp_pnl.csv`
-   (exchange-reported perp realized PnL), and `transfers.csv` (non-taxable
-   own-wallet transfers, for visibility). Pass `--tax-year YYYY` to restrict
-   report rows to one calendar year (lot accounting always uses full
-   history). If any transaction cannot be processed, the run exits nonzero
-   and says the 8949 is incomplete — do not file from a failing run.
-
-## Nix outputs
-
-- `packages.cli`: Go CLI binary
-- `packages.core`: Haskell financial core
-- `apps.run`: wrapper that runs the Go CLI with `--core` pointed at the flake-built Haskell binary
-- `apps.dry-run`: wrapper that runs the Go CLI with `--dry-run`
-- `apps.audit`: wrapper that runs `cryptotax audit ...`
-- `checks`: Go build, full Go test suite, Haskell build, Haskell test suite
-- `devShell`: Go + Haskell development environment
-
-## Project structure
-
-```
-cryptotax/
-├── flake.nix                 # Flake packages, apps, checks, and dev shell
-├── AGENTS.md                 # Agent working agreement (read first)
-├── docs/                     # Per-domain SPEC/ARCHITECTURE/REVIEW/QUIRKS
-│   ├── repo/                 #   repo-wide docs and decision records
-│   ├── core/ evm/ solana/    #   one directory per domain
-│   ├── hyperliquid/ ir/ audit/
-│   ├── audit-workflow.md     # Reproducible audit steps for normalized JSON
-│   └── known-transactions.md # Human-reviewed transaction evidence log
-├── schema/
-│   └── transactions.json     # JSON Schema (Go→Haskell contract)
-├── go/
-│   ├── cmd/                  # CLI entrypoint (cobra) + audit subcommands
-│   ├── audit/                # Audit payload capture, filtering, and summaries
-│   ├── decimal/              # Exact decimal-string arithmetic (money paths)
-│   ├── fetcher/              # Chain-specific data fetchers
-│   ├── price/                # CoinGecko USD price lookups (identity-gated)
-│   ├── normalize/            # Raw → unified IR + canonicalization boundary
-│   ├── transfer/             # Own-wallet transfer matching
-│   └── types/                # Shared Go structs + canonical ordering
-└── haskell/
-    ├── app/Main.hs           # Reads JSON stdin, runs engine, writes reports
-    ├── src/
-    │   ├── Types.hs          # ADTs, strict exact-decimal parsing
-    │   ├── Lot.hs            # FIFO cost basis lot tracker
-    │   ├── GainLoss.hs       # Per-disposal gain/loss engine
-    │   └── Report.hs         # Form 8949 + supplemental CSV output
-    └── test/Spec.hs          # QuickCheck properties + golden fixture
-```
-
-## Known limitations
-
-- EVM swaps and bridges are not fully reconstructed from per-address Etherscan rows yet; inbound legs are treated conservatively instead of guessed into taxable income. Internal ETH transfers (`txlistinternal`) are not fetched at all.
-- Hyperliquid deposits/withdrawals are not fetched, so USDC bridged into Hyperliquid surfaces as insufficient-lot errors when spent there. Positive funding receipts are modeled as ordinary income plus USDC acquisitions; negative funding goes to `funding_expenses.csv` as informational output without consuming USDC lots.
-- FIFO lots are pooled per asset symbol globally across wallets. IRS Rev. Proc. 2024-28 requires wallet-by-wallet basis tracking from 2025; adopting that is a pending, explicitly human decision (see `docs/repo/REVIEW.md`).
-- In-kind fees (gas) reduce proceeds in USD terms but the gas asset itself is never consumed from inventory.
-- Source APIs can omit metadata or use token symbols that do not map cleanly to historical price lookups. Those rows fall back to `"0"` USD values instead of inventing prices, and pricing refuses to trust metadata symbols for unverified on-chain identities (no $1 for fake "USDC").
-
-## Disclaimer
-
-This tool is for informational purposes only. It is not tax advice. Consult a
-qualified tax professional for your specific situation. The author is not
-responsible for any errors in tax calculations.
+Not tax advice. Check the decisions in `docs/core.md` with a tax
+professional, especially perpetual-futures treatment.

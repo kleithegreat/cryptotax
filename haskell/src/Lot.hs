@@ -1,146 +1,72 @@
-{-# LANGUAGE OverloadedStrings #-}
-
+-- | Per-account FIFO lot book (Treas. Reg. §1.1012-1(j)): units leave an
+-- account in order of their original acquisition time, and a transfer into
+-- the account does not reset that time.
 module Lot
-  ( LotQueue
-  , empty
-  , acquire
-  , dispose
+  ( Lot (..)
+  , Book
+  , insert
+  , take
+  , holding
   , holdingPeriod
-  , totalCostBasis
-  , totalUnits
   ) where
 
 import           Data.Map.Strict    (Map)
 import qualified Data.Map.Strict    as Map
-import           Data.Ratio         (numerator, denominator)
+import           Data.Sequence      (Seq)
+import qualified Data.Sequence      as Seq
 import           Data.Text          (Text)
-import qualified Data.Text          as T
-import           Data.Time          (UTCTime, utctDay)
+import           Data.Time          (Day, UTCTime)
 import           Data.Time.Calendar (addGregorianYearsRollOver)
-import           Types
+import           Prelude            hiding (take)
+import           Types              (Term (..))
 
--- | Per-asset FIFO queue. Each asset has a list of lots, oldest first.
-type LotQueue = Map AssetSymbol [TaxLot]
+data Lot = Lot
+  { lotQty    :: Rational
+  , lotCost   :: Rational -- ^ total USD basis of 'lotQty'
+  , lotTime   :: UTCTime  -- ^ acquisition instant, orders FIFO
+  , lotDate   :: Day      -- ^ acquisition date, starts the holding period
+  , lotOrigin :: Text     -- ^ event that created the lot
+  } deriving (Show)
 
-empty :: LotQueue
-empty = Map.empty
+-- | Lots keyed by (account, asset), oldest acquisition first.
+type Book = Map (Text, Text) (Seq Lot)
 
--- | Record an acquisition. Appends a new lot to the BACK of the queue (FIFO).
-acquire :: AssetSymbol -> UTCTime -> TokenAmount -> USD -> LotQueue -> LotQueue
-acquire asset timestamp amount costBasisUSD queue =
-  if amount == 0
-    then queue
-    else
-      let lot = TaxLot
-            { lotAsset       = asset
-            , lotAcquired    = timestamp
-            , lotRemaining   = amount
-            , lotCostPerUnit = unUSD costBasisUSD / unTokens amount
-            }
-      in Map.insertWith (\_ old -> old ++ [lot]) asset [lot] queue
-
--- | Record a disposal. Pops lots from the FRONT (FIFO) and returns gain/loss
--- records plus the updated queue. Errors if insufficient lots exist or the
--- disposal amount is negative (a contract violation, never a zero-gain no-op).
-dispose :: Disposal -> LotQueue -> Either Text ([GainLoss], LotQueue)
-dispose disp queue
-  | dispAmount disp < 0 =
-      Left $ "Negative disposal amount for " <> unAsset (dispAsset disp)
-           <> ": " <> showR (unTokens (dispAmount disp))
-  | otherwise =
-      let asset = dispAsset disp
-          lots  = Map.findWithDefault [] asset queue
-      in case consumeLots disp (dispAmount disp) lots [] of
-           Left err             -> Left err
-           Right (gains, lots') -> Right (gains, updateLots asset lots' queue)
-
--- | Walk lots FIFO, consuming units until the disposal is satisfied.
--- The Disposal is never mutated; @toConsume@ tracks remaining units.
--- This ensures the proportional proceeds allocation uses the original
--- total disposal amount as the denominator (fixing the multi-lot bug).
-consumeLots :: Disposal -> TokenAmount -> [TaxLot] -> [GainLoss]
-            -> Either Text ([GainLoss], [TaxLot])
-consumeLots _disp toConsume [] acc
-  | toConsume <= 0 = Right (reverse acc, [])
-  | otherwise      = Left $ "Insufficient lots for " <> unAsset (dispAsset _disp)
-                          <> ": need " <> showR (unTokens toConsume) <> " more units"
-consumeLots disp toConsume (lot : lots) acc
-  | toConsume <= 0 = Right (reverse acc, lot : lots)
-  | lotRemaining lot <= 0 = consumeLots disp toConsume lots acc
-  | lotRemaining lot <= toConsume =
-      -- Consume the entire lot
-      let consumed  = lotRemaining lot
-          basis     = USD (unTokens consumed * lotCostPerUnit lot)
-          proportion = unTokens consumed / unTokens (dispAmount disp)
-          proceeds  = USD (proportion * unUSD netProceeds)
-          gain      = mkGain disp lot consumed basis proceeds
-      in consumeLots disp (toConsume - consumed) lots (gain : acc)
-  | otherwise =
-      -- Partially consume this lot
-      let basis     = USD (unTokens toConsume * lotCostPerUnit lot)
-          proportion = unTokens toConsume / unTokens (dispAmount disp)
-          proceeds  = USD (proportion * unUSD netProceeds)
-          gain      = mkGain disp lot toConsume basis proceeds
-          lot'      = lot { lotRemaining = lotRemaining lot - toConsume }
-      in Right (reverse (gain : acc), lot' : lots)
+insert :: Text -> Text -> Lot -> Book -> Book
+insert account asset lot
+  | lotQty lot <= 0 = id
+  | otherwise = Map.alter (Just . place . maybe Seq.empty id) (account, asset)
   where
-    netProceeds = dispProceeds disp - dispFee disp
+    -- Stable: equal times keep arrival order.
+    place lots = case Seq.findIndexR ((<= lotTime lot) . lotTime) lots of
+      Nothing -> lot Seq.<| lots
+      Just i  -> Seq.insertAt (i + 1) lot lots
 
-mkGain :: Disposal -> TaxLot -> TokenAmount -> USD -> USD -> GainLoss
-mkGain disp lot amount basis proceeds = GainLoss
-  { glAsset     = dispAsset disp
-  , glAcquired  = lotAcquired lot
-  , glDisposed  = dispTime disp
-  , glAmount    = amount
-  , glCostBasis = basis
-  , glProceeds  = proceeds
-  , glGain      = proceeds - basis
-  , glPeriod    = holdingPeriod (lotAcquired lot) (dispTime disp)
-  }
+-- | Remove @qty@ units FIFO. Returns the slices taken (cost prorated), the
+-- quantity that was not there, and the new book.
+take :: Text -> Text -> Rational -> Book -> ([Lot], Rational, Book)
+take account asset qty book = go qty (Map.findWithDefault Seq.empty (account, asset) book) []
+  where
+    go need lots acc
+      | need <= 0 = done (reverse acc) 0 lots
+      | otherwise = case Seq.viewl lots of
+          Seq.EmptyL -> done (reverse acc) need Seq.empty
+          lot Seq.:< rest
+            | lotQty lot <= need -> go (need - lotQty lot) rest (lot : acc)
+            | otherwise ->
+                let part = lot { lotQty = need, lotCost = lotCost lot * need / lotQty lot }
+                    left = lot { lotQty = lotQty lot - need, lotCost = lotCost lot - lotCost part }
+                in done (reverse (part : acc)) 0 (left Seq.<| rest)
+    done slices missing lots =
+      (slices, missing, if Seq.null lots then Map.delete (account, asset) book else Map.insert (account, asset) lots book)
 
--- | IRS holding-period rule: long-term requires holding MORE than one year.
--- A sale on the one-year anniversary calendar date is still short-term, so the
--- comparison is calendar-based on UTC trade dates rather than elapsed days.
--- Feb 29 acquisitions roll over to Mar 1 (addGregorianYearsRollOver), the
--- conservative choice that never overstates long-term treatment.
-holdingPeriod :: UTCTime -> UTCTime -> HoldingPeriod
-holdingPeriod acquired disposed =
-  if utctDay disposed > addGregorianYearsRollOver 1 (utctDay acquired)
-    then LongTerm
-    else ShortTerm
+-- | All lots, for holdings reports.
+holding :: Book -> [((Text, Text), Lot)]
+holding book = [ (k, l) | (k, lots) <- Map.toList book, l <- foldr (:) [] lots ]
 
--- | Total cost basis across all lots in the queue (for invariant checking).
-totalCostBasis :: LotQueue -> USD
-totalCostBasis = Map.foldl' (\acc lots -> acc + sum (map lotBasis lots)) 0
-  where lotBasis l = USD (unTokens (lotRemaining l) * lotCostPerUnit l)
-
--- | Total units of an asset in the queue.
-totalUnits :: AssetSymbol -> LotQueue -> TokenAmount
-totalUnits asset queue =
-  sum $ map lotRemaining $ Map.findWithDefault [] asset queue
-
-updateLots :: AssetSymbol -> [TaxLot] -> LotQueue -> LotQueue
-updateLots asset lots queue
-  | null lots  = Map.delete asset queue
-  | otherwise  = Map.insert asset lots queue
-
--- | Render a Rational for error messages. Fractional digits are computed to
--- 18 places (full wei precision) so sub-1e-6 shortfalls are not shown as zero;
--- when the trimmed fractional part is empty, only the integer part is shown.
-showR :: Rational -> Text
-showR r =
-  let sign = if r < 0 then "-" else ""
-      r' = abs r
-      n = numerator r'
-      d = denominator r'
-      (q, rem') = n `divMod` d
-      fracDigits = trimTrailingZeroes (pad18 (T.pack (show (rem' * 10 ^ (18 :: Int) `div` d))))
-  in if T.null fracDigits
-     then sign <> T.pack (show q)
-     else sign <> T.pack (show q) <> "." <> fracDigits
-
-pad18 :: Text -> Text
-pad18 t = T.replicate (max 0 (18 - T.length t)) "0" <> t
-
-trimTrailingZeroes :: Text -> Text
-trimTrailingZeroes = T.dropWhileEnd (== '0')
+-- | Long-term requires holding MORE than one year, counted on local calendar
+-- dates. A Feb 29 acquisition rolls to Mar 1, which never overstates
+-- long-term treatment.
+holdingPeriod :: Day -> Day -> Term
+holdingPeriod acquired sold
+  | sold > addGregorianYearsRollOver 1 acquired = Long
+  | otherwise = Short

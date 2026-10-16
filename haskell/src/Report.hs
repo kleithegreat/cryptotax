@@ -1,192 +1,153 @@
 {-# LANGUAGE OverloadedStrings #-}
 
+-- | Renders per-tax-year outputs. Amounts are rounded to cents per row
+-- (half away from zero) and every printed gain equals printed proceeds minus
+-- printed basis, so columns and totals always agree.
 module Report
-  ( render8949CSV
-  , renderIncomeCSV
-  , renderFundingExpenseCSV
-  , renderPerpPnlCSV
-  , renderTransfersCSV
-  , renderUSD
+  ( Box (..)
+  , box
+  , consolidate
+  , form8949
+  , incomeCSV
+  , holdingsCSV
+  , reviewCSV
+  , exportedCSV
+  , summary
+  , cents
+  , money
   ) where
 
-import           Data.Maybe   (fromMaybe)
-import           Data.Ratio   (numerator, denominator)
-import           Data.Text    (Text)
-import qualified Data.Text    as T
-import           Data.Time    (UTCTime, formatTime, defaultTimeLocale)
+import           Data.List       (sortOn)
+import qualified Data.Map.Strict as Map
+import           Data.Ratio      (denominator, numerator)
+import           Data.Text       (Text)
+import qualified Data.Text       as T
+import           Data.Time       (Day, defaultTimeLocale, formatTime)
+import           Engine          (Exported (..))
+import           Lot             (Lot (..))
 import           Types
 
--- | Render GainLoss events as a Form 8949 compatible CSV.
-render8949CSV :: [GainLoss] -> Text
-render8949CSV gains =
-  let header = "Description,Date Acquired,Date Sold,Proceeds,Cost Basis,Gain or Loss,Term"
-      rows   = map renderRow gains
-  in T.unlines (header : rows)
+data Box = A | B | C | D | E | F | G | H | I | J | K | L
+  deriving (Eq, Ord, Show)
 
-renderRow :: GainLoss -> Text
-renderRow gl =
-  -- The gain column is rendered from the SUBTRACTION OF THE ROUNDED CENTS of
-  -- proceeds and basis, so the printed columns always satisfy
-  -- Gain = Proceeds - Cost Basis. Display-level only; internal Rationals are
-  -- untouched.
-  let proceedsCents = usdCents (glProceeds gl)
-      basisCents    = usdCents (glCostBasis gl)
-  in csvRow
-    [ renderDescription gl
-    , formatDate (glAcquired gl)
-    , formatDate (glDisposed gl)
-    , renderCents proceedsCents
-    , renderCents basisCents
-    , renderCents (proceedsCents - basisCents)
-    , case glPeriod gl of
-        ShortTerm -> "Short"
-        LongTerm  -> "Long"
-    ]
+-- | Form 8949 check box. Digital assets use G–L from tax year 2025 on; before
+-- that, crypto with no Form 1099-B goes in C/F.
+box :: Integer -> Row -> Box
+box year r = case (year >= 2025, rOrigin r, rTerm r) of
+  (True, BrokerReported True, Short)  -> G
+  (True, BrokerReported False, Short) -> H
+  (True, Unreported, Short)           -> I
+  (True, BrokerReported True, Long)   -> J
+  (True, BrokerReported False, Long)  -> K
+  (True, Unreported, Long)            -> L
+  (False, BrokerReported True, Short) -> A
+  (False, BrokerReported False, Short) -> B
+  (False, Unreported, Short)          -> C
+  (False, BrokerReported True, Long)  -> D
+  (False, BrokerReported False, Long) -> E
+  (False, Unreported, Long)           -> F
 
-renderDescription :: GainLoss -> Text
-renderDescription gl = renderAmount (glAmount gl) <> " " <> unAsset (glAsset gl)
-
-formatDate :: UTCTime -> Text
-formatDate = T.pack . formatTime defaultTimeLocale "%m/%d/%Y"
-
--- | Round a USD value to whole cents, half away from zero (NOT banker's
--- rounding, which would make printed columns disagree on .5 boundaries).
-usdCents :: USD -> Integer
-usdCents (USD r) =
-  let scaled = r * 100
-      n = abs (numerator scaled)
-      d = denominator scaled
-      q = (2 * n + d) `div` (2 * d)
-  in if scaled < 0 then negate q else q
-
--- | Render whole cents with 2 decimal places. Negative in parentheses per IRS.
-renderCents :: Integer -> Text
-renderCents cents =
-  let (dollars, remainCents) = abs cents `divMod` 100
-      formatted = T.pack (show dollars) <> "." <> padZero (T.pack (show remainCents))
-  in if cents < 0
-     then "(" <> formatted <> ")"
-     else formatted
-
--- | Render a USD value with 2 decimal places, rounding half away from zero.
-renderUSD :: USD -> Text
-renderUSD = renderCents . usdCents
-
--- | Render a token amount with up to 18 decimal places (full wei precision)
--- so sub-1e-8 disposals do not display as zero.
-renderAmount :: TokenAmount -> Text
-renderAmount (TokenAmount r) =
-  let scaled = round (r * 10 ^ (18 :: Int)) :: Integer
-      (whole, frac) = abs scaled `divMod` (10 ^ (18 :: Int))
-      sign = if scaled < 0 then "-" else ""
-      fracStr = T.dropWhileEnd (== '0') (padN 18 (T.pack (show frac)))
-  in sign <> T.pack (show whole) <> if T.null fracStr then "" else "." <> fracStr
-
-padZero :: Text -> Text
-padZero t = if T.length t < 2 then "0" <> t else t
-
-padN :: Int -> Text -> Text
-padN n t = T.replicate (max 0 (n - T.length t)) "0" <> t
-
--- ---------------------------------------------------------------------------
--- Supplemental reports — separate from 8949
--- ---------------------------------------------------------------------------
-
--- | Render ordinary income as a structured CSV. The Market column carries the
--- source market context when preserved (empty when absent); committed
--- Hyperliquid funding rows share an all-zero hash, so Market is the only
--- useful discriminator there.
-renderIncomeCSV :: [IncomeEntry] -> Text
-renderIncomeCSV entries =
-  let header = "Date,Tx ID,Asset,Amount,USD Value,Market"
-      rows   = map renderIncomeRow entries
-  in T.unlines (header : rows)
-
-renderIncomeRow :: IncomeEntry -> Text
-renderIncomeRow ii =
-  csvRow
-    [ formatDate (iiTimestamp ii)
-    , iiTxId ii
-    , unAsset (iiAsset ii)
-    , renderAmount (iiAmount ii)
-    , renderUSD (iiUSDValue ii)
-    , fromMaybe "" (iiMarket ii)
-    ]
-
--- | Render funding expenses as a structured CSV. See 'renderIncomeCSV' for
--- the Market column rationale.
-renderFundingExpenseCSV :: [FundingExpense] -> Text
-renderFundingExpenseCSV expenses =
-  let header = "Date,Tx ID,Asset,Amount,USD Value,Market"
-      rows   = map renderFundingRow expenses
-  in T.unlines (header : rows)
-
-renderFundingRow :: FundingExpense -> Text
-renderFundingRow fe =
-  csvRow
-    [ formatDate (feTimestamp fe)
-    , feTxId fe
-    , unAsset (feAsset fe)
-    , renderAmount (feAmount fe)
-    , renderUSD (feUSDValue fe)
-    , fromMaybe "" (feMarket fe)
-    ]
-
--- | Render transfer activity as a structured CSV. Transfers are not taxable
--- events; this output keeps them visible instead of silently dropping them.
-renderTransfersCSV :: [TransferEntry] -> Text
-renderTransfersCSV entries =
-  let header = "Date,Tx ID,Direction,Asset,Amount,USD Value,Wallet,Counterparty"
-      rows   = map renderTransferRow entries
-  in T.unlines (header : rows)
-
-renderTransferRow :: TransferEntry -> Text
-renderTransferRow te =
-  csvRow
-    [ formatDate (teTimestamp te)
-    , teTxId te
-    , case teDirection te of
-        DirIn  -> "In"
-        DirOut -> "Out"
-    , unAsset (teAsset te)
-    , renderAmount (teAmount te)
-    , renderUSD (teUSDValue te)
-    , teWallet te
-    , fromMaybe "" (teCounterparty te)
-    ]
-
--- | Render perp realized PnL as a structured CSV.
--- This is intentionally separate from 8949 because the cost-basis/proceeds
--- representation for derivative PnL on Form 8949 is unresolved.
-renderPerpPnlCSV :: [PerpPnlEntry] -> Text
-renderPerpPnlCSV entries =
-  let header = "Date,Tx ID,Asset,Amount,Direction,Realized PnL"
-      rows   = map renderPerpRow entries
-  in T.unlines (header : rows)
-
-renderPerpRow :: PerpPnlEntry -> Text
-renderPerpRow pp =
-  csvRow
-    [ formatDate (ppTimestamp pp)
-    , ppTxId pp
-    , unAsset (ppAsset pp)
-    , renderAmount (ppAmount pp)
-    , ppDirection pp
-    , renderUSD (ppClosedPnl pp)
-    ]
-
-csvRow :: [Text] -> Text
-csvRow = T.intercalate "," . map csvField
-
-csvField :: Text -> Text
-csvField field
-  | T.any needsQuoting guarded = "\"" <> T.replace "\"" "\"\"" guarded <> "\""
-  | otherwise = guarded
+-- | Merge rows that would print identically apart from amounts: same box
+-- source, asset, account, acquisition and sale dates. Sums are exact; the
+-- first disposal's event id is kept.
+consolidate :: [Row] -> [Row]
+consolidate rs = Map.elems (Map.fromListWith merge [ (key r, r) | r <- rs ])
   where
-    -- Spreadsheet formula-injection guard: '=', '+', '@' can start a formula
-    -- in Excel/Sheets, so prefix a literal quote. '-' is deliberately NOT
-    -- guarded so negative numbers stay clean.
-    guarded = case T.uncons field of
-      Just (c, _) | c == '=' || c == '+' || c == '@' -> "'" <> field
-      _                                              -> field
-    needsQuoting c = c == ',' || c == '"' || c == '\r' || c == '\n'
+    key r = (rOrigin r, rTerm r, rSold r, rAsset r, rAcquired r, rAccount r)
+    merge new old = old { rAmount = rAmount old + rAmount new
+                        , rProceeds = rProceeds old + rProceeds new
+                        , rBasis = rBasis old + rBasis new
+                        , rMerged = rMerged old + rMerged new }
+
+form8949 :: Integer -> [Row] -> Text
+form8949 year rs = csv
+  ("Box" : "Description" : "Date Acquired" : "Date Sold" : "Proceeds" : "Cost Basis" : "Gain or Loss" : "Term" : "Account" : "Event" : ["Lines Merged"])
+  [ [ T.pack (show (box year r)), amount (rAmount r) <> " " <> rAsset r
+    , maybe "VARIOUS" date (rAcquired r), date (rSold r)
+    , money p, money b, money (p - b)
+    , if rTerm r == Long then "Long" else "Short", rAccount r, rEvent r, T.pack (show (rMerged r)) ]
+  | r <- sortOn (\r -> (box year r, rSold r, rAsset r)) rs
+  , let p = cents (rProceeds r); b = cents (rBasis r) ]
+
+incomeCSV :: [IncomeRow] -> Text
+incomeCSV is = csv ["Date", "Type", "Asset", "Amount", "USD Value", "Account", "Event"]
+  [ [date (iDate i), iType i, iAsset i, amount (iAmount i), money (cents (iUSD i)), iAccount i, iEvent i] | i <- is ]
+
+holdingsCSV :: (Text -> Text) -> [((Text, Text), Lot)] -> Text
+holdingsCSV sym hs = csv ["Account", "Asset", "Amount", "Cost Basis", "Date Acquired", "From Event"]
+  [ [acct, sym asset, amount (lotQty l), money (cents (lotCost l)), date (lotDate l), lotOrigin l] | ((acct, asset), l) <- hs ]
+
+reviewCSV :: [Issue] -> Text
+reviewCSV is = csv ["Severity", "Event", "Message"]
+  [ [if isBlocking i then "BLOCKING" else "info", isEvent i, isMessage i] | i <- sortOn (not . isBlocking) is ]
+
+exportedCSV :: (Text -> Text) -> [Exported] -> Text
+exportedCSV sym es = csv ["Date Sent", "Account", "Asset", "Amount", "Cost Basis", "Date Acquired", "Event"]
+  [ [date (exDate e), exAccount e, sym (exAsset e), amount (lotQty (exLot e)), money (cents (lotCost (exLot e))), date (lotDate (exLot e)), exEvent e] | e <- es ]
+
+-- | Totals per Form 8949 box mapped to Schedule D lines, plus income.
+summary :: Integer -> Int -> [Row] -> [IncomeRow] -> Text
+summary year blocking rs is = T.unlines $
+  [ "Tax year " <> T.pack (show year)
+  , if blocking == 0 then "Status: FINAL (no blocking review items)"
+    else "Status: PROVISIONAL — " <> T.pack (show blocking) <> " blocking review item(s) in review.csv; do not file from this"
+  , ""
+  , "Form 8949 / Schedule D        Proceeds        Basis    Gain/Loss  Rows"
+  ] ++
+  [ T.justifyLeft 26 ' ' (T.pack (show bx) <> " → Schedule D line " <> line bx)
+      <> col (sum ps) <> col (sum bs) <> col (sum ps - sum bs) <> "  " <> T.pack (show (length ps))
+  | (bx, prs) <- Map.toList byBox, let ps = map fst prs; bs = map snd prs ] ++
+  [ ""
+  , "Net short-term: " <> money (net Short)
+  , "Net long-term:  " <> money (net Long)
+  , ""
+  , "Ordinary income (Schedule 1, " <> (if year >= 2024 then "line 8v, digital assets" else "line 8z, other income") <> "):"
+  ] ++
+  [ "  " <> T.justifyLeft 14 ' ' t <> money v | (t, v) <- Map.toList incomeByType ] ++
+  [ "  total         " <> money (sum (Map.elems incomeByType)) ]
+  where
+    byBox = Map.fromListWith (flip (++)) [ (box year r, [(cents (rProceeds r), cents (rBasis r))]) | r <- rs ]
+    net t = sum [ cents (rProceeds r) - cents (rBasis r) | r <- rs, rTerm r == t ]
+    incomeByType = Map.fromListWith (+) [ (iType i, cents (iUSD i)) | i <- is ]
+    col v = T.justifyRight 13 ' ' (money v)
+    line bx = case bx of
+      A -> "1b"; G -> "1b"; B -> "2"; H -> "2"; C -> "3"; I -> "3"
+      D -> "8b"; J -> "8b"; E -> "9"; K -> "9"; F -> "10"; L -> "10"
+
+-- | Round to whole cents, half away from zero.
+cents :: Rational -> Integer
+cents r =
+  let s = r * 100
+      n = abs (numerator s)
+      d = denominator s
+      q = (2 * n + d) `div` (2 * d)
+  in if s < 0 then negate q else q
+
+money :: Integer -> Text
+money c =
+  let (d, m) = abs c `divMod` 100
+      s = T.pack (show d) <> "." <> T.justifyRight 2 '0' (T.pack (show m))
+  in if c < 0 then "-" <> s else s
+
+-- | Quantity with up to 18 decimals, trailing zeros trimmed.
+amount :: Rational -> Text
+amount r =
+  let scaled = round (abs r * 10 ^ (18 :: Int)) :: Integer
+      (w, f) = scaled `divMod` (10 ^ (18 :: Int))
+      frac = T.dropWhileEnd (== '0') (T.justifyRight 18 '0' (T.pack (show f)))
+  in (if r < 0 then "-" else "") <> T.pack (show w) <> (if T.null frac then "" else "." <> frac)
+
+date :: Day -> Text
+date = T.pack . formatTime defaultTimeLocale "%m/%d/%Y"
+
+csv :: [Text] -> [[Text]] -> Text
+csv header body = T.unlines (map (T.intercalate "," . map field) (header : body))
+  where
+    field f
+      | T.any (`elem` [',', '"', '\n', '\r']) g = "\"" <> T.replace "\"" "\"\"" g <> "\""
+      | otherwise = g
+      where
+        -- Spreadsheet formula guard; '-' stays so negative amounts read as numbers.
+        g = case T.uncons f of
+          Just (c, _) | c `elem` ['=', '+', '@'] -> "'" <> f
+          _ -> f

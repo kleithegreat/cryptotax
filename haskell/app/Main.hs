@@ -2,163 +2,68 @@
 
 module Main (main) where
 
-import           Control.Monad        (unless, when)
+import           Control.Monad        (forM_, unless, when)
 import qualified Data.Aeson           as Aeson
 import qualified Data.ByteString      as BS
 import qualified Data.ByteString.Lazy as BL
+import qualified Data.Map.Strict      as Map
 import           Data.Text            (Text)
 import qualified Data.Text            as T
 import           Data.Text.Encoding   (encodeUtf8)
-import           Data.Time            (toGregorian, utctDay)
-import           System.Directory     (doesFileExist, removeFile)
+import qualified Data.Text.IO         as TIO
+import           Data.Time            (toGregorian)
+import           System.Directory     (createDirectoryIfMissing)
 import           System.Environment   (getArgs)
-import           System.Exit          (exitFailure)
-import           System.IO            (hPutStrLn, stderr)
-import           Text.Read            (readMaybe)
+import           System.Exit          (ExitCode (..), exitWith)
+import           System.FilePath      ((</>))
+import           System.IO            (stderr)
 
-import           System.FilePath (takeDirectory, (</>))
-
+import           Engine
+import           Report
 import           Types
-import           GainLoss  (processTransactions, ProcessResult(..))
-import           Report    (render8949CSV, renderIncomeCSV, renderFundingExpenseCSV,
-                            renderPerpPnlCSV, renderTransfersCSV, renderUSD)
-
--- | The only payload contract version this core understands.
-supportedVersion :: Text
-supportedVersion = "1.0.0"
 
 main :: IO ()
 main = do
   args <- getArgs
-  let outputFile = parseOutputFlag args
-  taxYear <- parseTaxYearFlag args
-
+  let out = case dropWhile (/= "--out") args of
+        (_ : d : _) -> d
+        _           -> "reports"
   input <- BL.getContents
+  payload <- case Aeson.eitherDecode input of
+    Left err -> die' ("cannot parse IR: " <> T.pack err)
+    Right p  -> pure p
+  unless (pVersion payload == "2") $ die' ("unsupported IR version " <> pVersion payload)
 
-  case Aeson.eitherDecode input of
-    Left err -> do
-      hPutStrLn stderr $ "Failed to parse JSON input: " ++ err
-      exitFailure
+  let res = run (pYears payload) (pEvents payload)
+      issues = pIssues payload ++ resIssues res
+      blocking = length (filter isBlocking issues)
+      symbols = Map.fromList [ (legAsset l, legSymbol l) | e <- pEvents payload, l <- evLegs e ++ evFees e ]
+      sym a = Map.findWithDefault a a symbols
+      yearOf d = let (y, _, _) = toGregorian d in y
+      rows = consolidate (resRows res)
 
-    Right payload -> do
-      unless (payloadVersion payload == supportedVersion) $ do
-        hPutStrLn stderr $ "Unsupported payload version: "
-          ++ show (payloadVersion payload)
-          ++ " (expected " ++ show supportedVersion ++ ")"
-        exitFailure
+  createDirectoryIfMissing True out
+  write (out </> "review.csv") (reviewCSV issues)
+  write (out </> "exported-lots.csv") (exportedCSV sym (resExported res))
+  forM_ (pYears payload) $ \y -> do
+    let dir = out </> show y
+        rs = [ r | r <- rows, yearOf (rSold r) == y ]
+        is = [ i | i <- resIncome res, yearOf (iDate i) == y ]
+        s = summary y blocking rs is
+    createDirectoryIfMissing True dir
+    write (dir </> "form8949.csv") (form8949 y rs)
+    write (dir </> "income.csv") (incomeCSV is)
+    write (dir </> "holdings-end.csv") (holdingsCSV sym (Map.findWithDefault [] y (resHoldings res)))
+    write (dir </> "summary.txt") s
+    TIO.hPutStrLn stderr s
 
-      hPutStrLn stderr $ "Received "
-        ++ show (length (payloadTransactions payload))
-        ++ " transactions, "
-        ++ show (length (payloadWallets payload))
-        ++ " wallets"
+  TIO.hPutStrLn stderr $ "Reports written to " <> T.pack out <> "/"
+  when (blocking > 0) $ do
+    TIO.hPutStrLn stderr $ "PROVISIONAL: " <> T.pack (show blocking) <> " blocking item(s) in review.csv"
+    exitWith (ExitFailure 3)
 
-      let result = processTransactions (payloadTransactions payload)
+write :: FilePath -> Text -> IO ()
+write path = BS.writeFile path . encodeUtf8
 
-      mapM_ (\e -> hPutStrLn stderr $ "Warning: " ++ show e) (prErrors result)
-
-      -- Lot accounting always runs over the full history; --tax-year only
-      -- filters which rows are rendered into the report files.
-      let inYear t = case taxYear of
-            Nothing -> True
-            Just y  -> let (ty, _, _) = toGregorian (utctDay t) in ty == y
-          gains         = filter (inYear . glDisposed)  (prGainLosses result)
-          incomeEntries = filter (inYear . iiTimestamp) (prIncome result)
-          fundingExps   = filter (inYear . feTimestamp) (prFundingExpenses result)
-          perpEntries   = filter (inYear . ppTimestamp) (prPerpPnl result)
-          transferRows  = filter (inYear . teTimestamp) (prTransfers result)
-
-      case taxYear of
-        Nothing -> pure ()
-        Just y -> do
-          let kept  = length gains + length incomeEntries + length fundingExps
-                    + length perpEntries + length transferRows
-              total = length (prGainLosses result) + length (prIncome result)
-                    + length (prFundingExpenses result) + length (prPerpPnl result)
-                    + length (prTransfers result)
-          hPutStrLn stderr $ "Tax year " ++ show y ++ ": excluded "
-            ++ show (total - kept) ++ " row(s) outside the requested year"
-
-      let csv = render8949CSV gains
-      writeFileUtf8 outputFile csv
-
-      hPutStrLn stderr $ "Wrote "
-        ++ show (length gains)
-        ++ " gain/loss events to "
-        ++ outputFile
-
-      let totalGain = sum $ map (unUSD . glGain) gains
-      hPutStrLn stderr $ "Net gain/loss: $" ++ T.unpack (renderUSD (USD totalGain))
-
-      let incomeTotal = sum $ map (unUSD . iiUSDValue) incomeEntries
-      hPutStrLn stderr $ "Total income: $" ++ T.unpack (renderUSD (USD incomeTotal))
-
-      let outDir = takeDirectory outputFile
-
-      -- Supplemental: ordinary income report
-      writeSupplemental (outDir </> "income.csv") "income"
-        (renderIncomeCSV incomeEntries) (length incomeEntries)
-
-      -- Supplemental: funding expenses report
-      unless (null fundingExps) $ do
-        let fundingTotal = sum $ map (unUSD . feUSDValue) fundingExps
-        hPutStrLn stderr $ "Total funding expenses: $"
-          ++ T.unpack (renderUSD (USD fundingTotal))
-      writeSupplemental (outDir </> "funding_expenses.csv") "funding expense"
-        (renderFundingExpenseCSV fundingExps) (length fundingExps)
-
-      -- Supplemental: perp realized PnL report
-      unless (null perpEntries) $ do
-        let perpTotal = sum $ map (unUSD . ppClosedPnl) perpEntries
-        hPutStrLn stderr $ "Total perp realized PnL: $"
-          ++ T.unpack (renderUSD (USD perpTotal))
-      writeSupplemental (outDir </> "perp_pnl.csv") "perp PnL"
-        (renderPerpPnlCSV perpEntries) (length perpEntries)
-
-      -- Supplemental: transfer visibility report (non-taxable activity)
-      writeSupplemental (outDir </> "transfers.csv") "transfer"
-        (renderTransfersCSV transferRows) (length transferRows)
-
-      -- Report files are written above even when rows failed, but the exit
-      -- code must still signal that the 8949 is incomplete.
-      unless (null (prErrors result)) $ do
-        hPutStrLn stderr $ "ERROR: " ++ show (length (prErrors result))
-          ++ " transaction(s) could not be processed; the 8949 report is incomplete"
-        exitFailure
-
--- | Write report output as UTF-8 regardless of the process locale.
-writeFileUtf8 :: FilePath -> Text -> IO ()
-writeFileUtf8 path = BS.writeFile path . encodeUtf8
-
--- | Write a supplemental CSV when its channel has rows; remove a stale file
--- left by a previous run when the channel is empty.
-writeSupplemental :: FilePath -> String -> Text -> Int -> IO ()
-writeSupplemental path label csv rowCount
-  | rowCount == 0 = do
-      stale <- doesFileExist path
-      when stale (removeFile path)
-  | otherwise = do
-      writeFileUtf8 path csv
-      hPutStrLn stderr $ "Wrote " ++ show rowCount ++ " " ++ label
-        ++ " rows to " ++ path
-
-parseOutputFlag :: [String] -> FilePath
-parseOutputFlag []                   = "8949_report.csv"
-parseOutputFlag ("--output" : f : _) = f
-parseOutputFlag (_ : rest)           = parseOutputFlag rest
-
--- | Parse the optional --tax-year flag. Lot accounting still processes the
--- full history; the flag only controls which rows are rendered.
-parseTaxYearFlag :: [String] -> IO (Maybe Integer)
-parseTaxYearFlag []                  = pure Nothing
-parseTaxYearFlag ["--tax-year"]      = badTaxYear "(missing value)"
-parseTaxYearFlag ("--tax-year" : v : _) =
-  case readMaybe v :: Maybe Integer of
-    Just y | y >= 1000 && y <= 9999 -> pure (Just y)
-    _                               -> badTaxYear v
-parseTaxYearFlag (_ : rest)          = parseTaxYearFlag rest
-
-badTaxYear :: String -> IO a
-badTaxYear v = do
-  hPutStrLn stderr $ "Invalid --tax-year value: " ++ v ++ " (expected a 4-digit year)"
-  exitFailure
+die' :: Text -> IO a
+die' msg = TIO.hPutStrLn stderr msg >> exitWith (ExitFailure 1)
