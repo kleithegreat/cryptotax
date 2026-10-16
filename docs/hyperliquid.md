@@ -23,6 +23,9 @@
   with realized history.
 - `send` to `0x2000000000000000000000000000000000000000` moves USDC to
   HyperEVM, not to a person.
+- A `withdraw`'s or `send`'s fee is charged on top of the amount, but an
+  `internalTransfer`'s fee comes out of what the recipient gets. Reading them
+  the same way left a trading-bot account $2 off its live balance.
 - The API serves only the 10,000 most recent fills; past that, history is
   lost for good. Export before then.
 - Funding hashes are all zeros; funding is keyed by market and time.

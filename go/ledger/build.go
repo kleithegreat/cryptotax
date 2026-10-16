@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/kevin/cryptotax/asset"
 	"github.com/kevin/cryptotax/config"
 	"github.com/kevin/cryptotax/decimal"
 )
@@ -370,7 +371,7 @@ func (b *builder) labeled(v valued) bool {
 		if in {
 			e := event(Add, v)
 			e.Reason = "custody"
-			if cp.Basis != "fmv" {
+			if cp.Basis != "fmv" && !allCash(v) {
 				e.Reason = "unresolved"
 				b.issue(v.m.ID, true, "inflow from own untracked account (%s): its cost basis is unknown; override with custody_in", cp.Note)
 			}
@@ -427,7 +428,7 @@ func (b *builder) override(v valued, ov config.Override) {
 	s := v.sign()
 	wantIn := map[string]bool{config.OvIncome: true, config.OvCustodyIn: true, config.OvGiftIn: true, config.OvSpam: true}[ov.Treat]
 	wantOut := map[string]bool{config.OvSpend: true, config.OvGiftOut: true, config.OvLost: true, config.OvCustodyOut: true}[ov.Treat]
-	if (wantIn && s != 1) || (wantOut && s != -1) || (ov.Treat == config.OvTrade && s != 0) || ov.Treat == config.OvBasis {
+	if (wantIn && s != 1) || (wantOut && s != -1) || (ov.Treat == config.OvTrade && s != 0 && s != -1) || ov.Treat == config.OvBasis {
 		b.issue(v.m.ID, true, "override %q does not fit this movement", ov.Treat)
 		b.emit(event(Trade, v))
 		return
@@ -478,7 +479,7 @@ func (b *builder) pair(outs, ins []valued) []valued {
 		best := -1
 		var bestGap time.Duration
 		for i, in := range ins {
-			if taken[i] || in.m.Account == o.m.Account || len(in.m.Deltas) != 1 || (o.sign() < 0 && len(o.m.Deltas) != 1) {
+			if taken[i] || in.m.Account == o.m.Account || len(in.m.Deltas) != 1 {
 				continue
 			}
 			gap := in.m.Time.Sub(o.m.Time)
@@ -496,7 +497,7 @@ func (b *builder) pair(outs, ins []valued) []valued {
 		taken[best] = true
 		in := ins[best]
 		kind := Trade
-		if o.sign() < 0 && o.m.Deltas[0].Asset.Key == in.m.Deltas[0].Asset.Key {
+		if len(o.m.Deltas) == 1 && o.m.Deltas[0].Asset.Key == in.m.Deltas[0].Asset.Key {
 			kind = Move
 		}
 		e := event(kind, o, in)
@@ -518,7 +519,7 @@ func comparable(o, in valued) bool {
 	switch {
 	case o.net != nil && in.usd != nil:
 		ov, iv = o.net, in.usd
-	case o.sign() < 0 && o.m.Deltas[0].Asset.Key == in.m.Deltas[0].Asset.Key:
+	case len(o.m.Deltas) == 1 && o.m.Deltas[0].Asset.Key == in.m.Deltas[0].Asset.Key:
 		ov = new(big.Rat).Abs(o.m.Deltas[0].Amount)
 		iv = new(big.Rat).Abs(in.m.Deltas[0].Amount)
 	default:
@@ -529,6 +530,16 @@ func comparable(o, in valued) bool {
 	}
 	r := new(big.Rat).Quo(iv, ov)
 	return r.Cmp(pairMinRatio) >= 0 && r.Cmp(pairMaxRatio) <= 0
+}
+
+// allCash: cash has no basis to supply, so its arrival never needs one.
+func allCash(v valued) bool {
+	for _, d := range v.m.Deltas {
+		if !asset.IsCash(d.Asset.Key) {
+			return false
+		}
+	}
+	return true
 }
 
 func sameKeys(a, b map[string]bool) bool {

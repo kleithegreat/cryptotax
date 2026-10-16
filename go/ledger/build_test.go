@@ -121,6 +121,8 @@ func TestBridgesPairByTimeAndValue(t *testing.T) {
 		mv("s:out", time.Hour, "solana:me", true, []string{"solver"}, d(sol, "-10")),
 		mv("a:usd", time.Hour+30*time.Second, "arbitrum:me", false, []string{"0xsolver"}, d(usd, "1455")),
 		mv("a:late", 3*time.Hour, "arbitrum:me", false, []string{"0xsomeone"}, d(usd, "1455")),
+		mv("s:multi", 5*time.Hour, "solana:me", true, []string{"solver"}, d(usd, "-126.28"), d(sol, "-0.003")),
+		mv("e:eth", 5*time.Hour+26*time.Second, "ethereum:me", false, []string{"0xsolver"}, d(eth, "0.0618")),
 	}, nil, nil, prices)
 
 	if e := find(t, p, "e:out+a:in"); e.Kind != Move {
@@ -128,6 +130,9 @@ func TestBridgesPairByTimeAndValue(t *testing.T) {
 	}
 	if e := find(t, p, "s:out+a:usd"); e.Kind != Trade {
 		t.Errorf("cross-chain swap: %+v", e)
+	}
+	if e := find(t, p, "s:multi+e:eth"); e.Kind != Trade {
+		t.Errorf("a multi-asset outflow pairs as an exchange: %+v", e)
 	}
 	if e := find(t, p, "a:late"); e.Reason != "unresolved" {
 		t.Errorf("an inflow with nothing to pair stays unresolved: %+v", e)

@@ -67,7 +67,7 @@ const (
 	OvSpam       = "spam"
 	OvIgnore     = "ignore" // not a real balance change (spoofed event)
 	OvPair       = "pair"   // With names the other half of a bridge/swap
-	OvTrade      = "trade"  // confirm a lopsided exchange as real
+	OvTrade      = "trade"  // confirm an exchange: lopsided, or sold for no net proceeds
 	OvBasis      = "basis"  // broker sale: supply missing basis/acquired
 )
 

@@ -16,7 +16,7 @@ wins.
 4. **Two-sided** movements are exchanges.
 5. **Counterparty labels** (`counterparties`): `account` mirrors the transfer
    into a tracked account (e.g. `robinhood`); `custody` is the taxpayer's own
-   untracked account; `third_party` makes outflows payments and inflows
+   untracked account (arriving stablecoins need no basis, anything else does); `third_party` makes outflows payments and inflows
    income; `spam` gives a $0 basis.
 6. **Spam and spoofs.** An inflow the holder did not sign is spam when it is
    worth under $0.01 or has no trusted price. An outflow the holder did not

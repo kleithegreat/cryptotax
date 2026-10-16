@@ -41,7 +41,8 @@ none remain. Resolve each one in `cryptotax.json`:
   untracked exchange account, `third_party` for someone else, and `spam`.
 - `overrides`: classify one movement by id. The treatments are `income`,
   `spend`, `gift_out`, `lost`, `custody_out`, `custody_in`, `gift_in`, `spam`,
-  `ignore`, `trade` (confirm a lopsided exchange), `pair` (join two halves of
+  `ignore`, `trade` (confirm a lopsided exchange, or a sale whose fees ate the
+  proceeds), `pair` (join two halves of
   a bridge/swap), and `basis` (supply a broker sale's missing basis).
 
 Then rerun with `--offline`. The run also replays every account's history

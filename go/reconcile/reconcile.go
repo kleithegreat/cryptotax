@@ -19,8 +19,9 @@ import (
 	"github.com/kevin/cryptotax/netcache"
 )
 
-// Hyperliquid's API rounds and settles in ways that leave cent-level noise.
-var hlTolerance = big.NewRat(1, 1)
+// Hyperliquid leaves a small unexplained residual (≈$0.29 on a real account
+// with a year of perps); anything bigger is missing history.
+var hlTolerance = big.NewRat(1, 2)
 
 type balances map[string]map[string]*big.Rat // account -> asset key -> amount
 

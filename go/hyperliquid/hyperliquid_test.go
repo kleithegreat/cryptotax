@@ -42,12 +42,14 @@ func TestLedgerDepositSharesTheArbitrumTxID(t *testing.T) {
 		`{"time":3,"hash":"0xc","delta":{"type":"accountClassTransfer","usdc":"5","toPerp":true}}`,
 		`{"time":4,"hash":"0xs","delta":{"type":"send","user":"0xother","destination":"` + me + `","token":"USDC","amount":"7","fee":"0"}}`,
 		`{"time":5,"hash":"0xv","delta":{"type":"vaultDeposit","vault":"0xv","usdc":"10"}}`,
+		`{"time":6,"hash":"0xi","delta":{"type":"internalTransfer","usdc":"100.0","user":"` + me + `","destination":"0xsub","fee":"1.0"}}`,
+		`{"time":7,"hash":"0xj","delta":{"type":"internalTransfer","usdc":"100.0","user":"0xsub","destination":"` + me + `","fee":"1.0"}}`,
 	} {
 		if err := res.ledger(json.RawMessage(raw), me, "hyperliquid:"+me); err != nil {
 			t.Fatal(err)
 		}
 	}
-	if len(res.Movements) != 3 {
+	if len(res.Movements) != 5 {
 		t.Fatalf("movements %+v", res.Movements)
 	}
 	dep, wd, send := res.Movements[0], res.Movements[1], res.Movements[2]
@@ -59,6 +61,10 @@ func TestLedgerDepositSharesTheArbitrumTxID(t *testing.T) {
 	}
 	if send.ID != "hyperliquid:0xs" || send.Signed || send.Counterparties[0] != "0xother" {
 		t.Errorf("send %+v", send)
+	}
+	out, in := res.Movements[3], res.Movements[4]
+	if out.Deltas[0].Amount.RatString() != "-100" || out.Fee != nil || in.Deltas[0].Amount.RatString() != "99" {
+		t.Errorf("internalTransfer fee comes out of the amount received: out %+v in %+v", out, in)
 	}
 	if len(res.Issues) != 1 || !res.Issues[0].Blocking {
 		t.Errorf("unsupported ledger types must block: %+v", res.Issues)

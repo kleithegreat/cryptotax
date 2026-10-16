@@ -110,6 +110,13 @@ main = do
   eq failures "unseen units: FMV basis" [(2, 310, 300, Short, Just (fromGregorian 2025 1 1))] (map amounts (rowsOf unseen))
   eq failures "unseen units: not blocking" 0 (length (blocking unseen))
 
+  -- Out and back within one account in one event: only the difference is spent.
+  let roundTrip = [ buy "b" (at 2025 1 1) "SOL" (1/100) 2
+                  , ev "rt" (at 2025 1 2) Move [leg "a" "SOL" 5 (Just 750), leg "a" "SOL" (-5001/1000) (Just (75015/100))] [] ]
+  eq failures "round trip spends only the difference" [(1/1000, 3/20, 1/5, Short, Just (fromGregorian 2025 1 1))]
+     (map amounts (rowsOf roundTrip))
+  eq failures "round trip is not missing history" 0 (length (blocking roundTrip))
+
   -- Missing history blocks and is provisionally $0 basis.
   let missing = [sell "s" (at 2025 1 2) "SOL" 1 50]
   eq failures "missing history row" [(1, 50, 0, Short, Just (fromGregorian 2025 1 2))] (map amounts (rowsOf missing))

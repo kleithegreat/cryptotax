@@ -1,3 +1,4 @@
+{-# LANGUAGE MultiWayIf        #-}
 {-# LANGUAGE OverloadedStrings #-}
 
 -- | Applies IR events to the lot book and produces Form 8949 rows, income
@@ -222,15 +223,10 @@ move ev st0 = foldl' perAsset st0 assets
       in go asset froms tos st
     go asset ((a, qa, l) : fs) ((b, qb) : ts) st =
       let q = min qa qb
-          (slices, missing, book') = Lot.take a asset q (book st)
-          atFMV = evReason ev == "unseen_at_fmv"
-          filler = [ Lot missing (if atFMV then fmv l * missing / qty l else 0) (evTime ev) (evDate ev) (evId ev) | missing > 0 ]
-          st' = st { book = foldr (Lot.insert b asset) book' (slices ++ filler) }
-          st''
-            | missing == 0 = st'
-            | atFMV = issue ev False (showQ missing <> " " <> sym st asset <> " sent from " <> a <> " were never seen arriving there; basis = value at transfer") (needPrice ev [l] st')
-            | otherwise = issue ev True (missingText missing asset a st) st'
-      in go asset (if qa > q then (a, qa - q, l) : fs else fs) (if qb > q then (b, qb - q) : ts else ts) st''
+          fs' = if qa > q then (a, qa - q, l) : fs else fs
+          ts' = if qb > q then (b, qb - q) : ts else ts
+      -- Out and back within one account (a sponsor lending gas) moves nothing.
+      in go asset fs' ts' (if a == b then st else carry asset a b q l st)
     go asset ((a, qa, l) : fs) [] st =
       let value = fmv l * qa / qty l
       in go asset fs [] (dispose ev Unreported a asset qa value (needPrice ev [l] st))
@@ -238,6 +234,15 @@ move ev st0 = foldl' perAsset st0 assets
       let st' = issue ev False ("received " <> showQ qb <> " " <> sym st asset <> " more than was sent; extra units get $0 basis") st
       in go asset [] ts (acquire ev b asset qb 0 st')
     go _ [] [] st = st
+    carry asset a b q l st =
+      let (slices, missing, book') = Lot.take a asset q (book st)
+          atFMV = evReason ev == "unseen_at_fmv"
+          filler = [ Lot missing (if atFMV then fmv l * missing / qty l else 0) (evTime ev) (evDate ev) (evId ev) | missing > 0 ]
+          st' = st { book = foldr (Lot.insert b asset) book' (slices ++ filler) }
+      in if
+           | missing == 0 -> st'
+           | atFMV -> issue ev False (showQ missing <> " " <> sym st asset <> " sent from " <> a <> " were never seen arriving there; basis = value at transfer") (needPrice ev [l] st')
+           | otherwise -> issue ev True (missingText missing asset a st) st'
 
 receiveIncome :: Event -> St -> Leg -> St
 receiveIncome ev st0 l =

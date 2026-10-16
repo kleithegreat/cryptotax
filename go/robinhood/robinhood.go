@@ -127,8 +127,10 @@ func row(rec []string, cols map[string]int, loc *time.Location) (ledger.Event, e
 	return ledger.Event{
 		// The broker's own row identity: same account, year, asset, date,
 		// units and proceeds never describe two different sales.
-		ID:     fmt.Sprintf("robinhood:%s:%s:%s:%s:%s", year, date, a.Key, units, proceeds),
-		Time:   day.Add(24*time.Hour - time.Second),
+		ID: fmt.Sprintf("robinhood:%s:%s:%s:%s:%s", year, date, a.Key, units, proceeds),
+		// Only the date is known; the sale is placed at its start so that a
+		// same-day withdrawal cannot take the units the broker says it sold.
+		Time:   day,
 		Kind:   ledger.BrokerSale,
 		Broker: b,
 		Note:   note,

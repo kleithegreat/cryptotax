@@ -9,7 +9,7 @@
 - A small verified table maps identities to economic assets. Wrapped native
   coins (WETH, wSOL) are the native coin, so wrapping is not a taxable
   exchange. USD stablecoins (USDC, USDC.e, USDT, DAI, PYUSD on the supported
-  chains, and Hyperliquid's USDC) are the single cash asset `USD`. Every
+  chains, Phantom CASH, and Hyperliquid's USDC) are the single cash asset `USD`. Every
   address in the table was checked against an external source (DefiLlama
   symbol lookup).
 - Form 1099-DA rows are identified by their DTI code; an unknown code fails

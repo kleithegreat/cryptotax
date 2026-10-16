@@ -159,20 +159,25 @@ func (res *Result) ledger(raw json.RawMessage, u, account string) error {
 			return fmt.Errorf("hyperliquid %s %s: %w", d.Type, r.Hash, err)
 		}
 		m.ID = "hyperliquid:" + r.Hash
+		fee, err := amount(orZero(d.Fee))
+		if err != nil {
+			return err
+		}
 		switch u {
 		case from:
 			m.Signed = true
 			m.Counterparties = []string{to}
 			v.Neg(v)
-			fee, err := amount(orZero(d.Fee))
-			if err != nil {
-				return err
-			}
-			if fee.Sign() != 0 {
+			// A send's fee is charged on top; an internalTransfer's fee comes
+			// out of what the recipient gets (verified by balance replay).
+			if fee.Sign() != 0 && d.Type != "internalTransfer" {
 				m.Fee = &ledger.Delta{Asset: usdc, Amount: fee}
 			}
 		case to:
 			m.Counterparties = []string{from}
+			if d.Type == "internalTransfer" {
+				v.Sub(v, fee)
+			}
 		default:
 			return fmt.Errorf("hyperliquid %s %s does not involve %s", d.Type, r.Hash, u)
 		}
